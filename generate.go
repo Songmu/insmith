@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"path"
 	"strings"
 	"text/template"
 )
@@ -27,6 +26,9 @@ func generate(c config) (string, error) {
 	}
 	if c.assetPattern == "" {
 		c.assetPattern = "{binary}_{version}_{os}_{arch}"
+	}
+	if c.workflow != "" && !strings.Contains(c.workflow, "/") {
+		c.workflow = c.repository + "/.github/workflows/" + c.workflow
 	}
 	switch c.verification {
 	case "attestation", "attestation-or-checksum", "checksum", "none":
@@ -92,7 +94,7 @@ urlencode_tag() {
 version=${1:-}
 if [ -z "$version" ]; then
 	need curl
-	version=$(curl -fsSL "https://api.github.com/repos/$REPOSITORY/releases/latest" |
+	version=$(curl --proto '=https' --tlsv1.2 -fsSL "https://api.github.com/repos/$REPOSITORY/releases/latest" |
 		sed -n 's/^[[:space:]]*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
 	[ -n "$version" ] || fail "could not determine the latest release"
 fi
@@ -112,7 +114,7 @@ esac
 asset_base=$(printf '%s' "$ASSET_PATTERN" |
 	sed -e "s/{binary}/$BINARY/g" -e "s/{version}/$version/g" -e "s/{os}/$os/g" -e "s/{arch}/$arch/g")
 release_api="https://api.github.com/repos/$REPOSITORY/releases/tags/$tag"
-release_json=$(curl -fsSL "$release_api") || fail "could not find release $version"
+release_json=$(curl --proto '=https' --tlsv1.2 -fsSL "$release_api") || fail "could not find release $version"
 asset_urls=$(printf '%s\n' "$release_json" |
 	sed -n 's/^[[:space:]]*"browser_download_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 
@@ -132,7 +134,7 @@ asset_name=${asset_url##*/}
 tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/insmith.XXXXXX") || fail "could not create temporary directory"
 trap 'rm -rf "$tmpdir"' EXIT HUP INT TERM
 artifact="$tmpdir/$asset_name"
-curl -fsSL "$asset_url" -o "$artifact" || fail "could not download $asset_name"
+curl --proto '=https' --tlsv1.2 -fsSL "$asset_url" -o "$artifact" || fail "could not download $asset_name"
 
 verify_checksum() {
 	checksum_name=$(printf '%s' "$CHECKSUM_PATTERN" |
@@ -141,7 +143,7 @@ verify_checksum() {
 	[ "$(printf '%s\n' "$checksum_url" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 1 ] ||
 		fail "could not find a unique checksum asset named $checksum_name"
 	checksums="$tmpdir/$checksum_name"
-	curl -fsSL "$checksum_url" -o "$checksums" || fail "could not download checksums"
+	curl --proto '=https' --tlsv1.2 -fsSL "$checksum_url" -o "$checksums" || fail "could not download checksums"
 	expected=$(awk -v name="$asset_name" '$2 == name || $2 == "*" name { print $1; exit }' "$checksums")
 	[ -n "$expected" ] || fail "checksum for $asset_name is missing"
 	if command -v sha256sum >/dev/null 2>&1; then
@@ -158,7 +160,10 @@ verify_checksum() {
 
 verify_attestation() {
 	command -v gh >/dev/null 2>&1 || return 2
+	gh_version=$(gh --version 2>/dev/null | awk 'NR == 1 { sub(/^gh version /, "", $0); split($0, v, "."); print v[1] * 1000000 + v[2] * 1000 + v[3] }')
+	[ -n "$gh_version" ] && [ "$gh_version" -ge 2093000 ] || return 2
 	gh attestation verify --help >/dev/null 2>&1 || return 2
+	gh attestation verify --help 2>&1 | grep -q -- '--signer-digest' || return 2
 	command -v git >/dev/null 2>&1 || return 2
 	commit=$(git ls-remote "https://github.com/$REPOSITORY.git" "refs/tags/$tag^{}" | awk 'NR == 1 { print $1 }')
 	if [ -z "$commit" ]; then
@@ -203,10 +208,9 @@ case "$asset_name" in
 		unzip -q "$artifact" -d "$tmpdir"
 		;;
 	*)
-		cp "$artifact" "$tmpdir/$BINARY"
 		;;
 esac
-executable=$(find "$tmpdir" -type f -name "$BINARY" -perm -u+x -print | head -n 1)
+executable=$(find "$tmpdir" -type f -name "$BINARY" -print | head -n 1)
 [ -n "$executable" ] || fail "could not find executable $BINARY in $asset_name"
 mkdir -p "$INSTALL_DIR" || fail "could not create $INSTALL_DIR"
 install -m 0755 "$executable" "$INSTALL_DIR/$BINARY" || fail "could not install $BINARY"
