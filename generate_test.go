@@ -41,6 +41,10 @@ func TestGenerateValidation(t *testing.T) {
 	if err == nil {
 		t.Error("generate accepted an unsafe binary name")
 	}
+	_, err = generate(config{repository: "owner/repo", checksumPattern: "bad/path", verification: "checksum"})
+	if err == nil {
+		t.Error("generate accepted an unsafe checksum pattern")
+	}
 }
 
 func TestShellQuote(t *testing.T) {
@@ -60,15 +64,17 @@ func TestRunHelp(t *testing.T) {
 }
 
 func TestWorkflowPath(t *testing.T) {
-	script, err := generate(config{
-		repository:   "owner/repo",
-		workflow:     ".github/workflows/release.yaml",
-		verification: "none",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(script, "WORKFLOW='owner/repo/.github/workflows/release.yaml'") {
-		t.Errorf("generated script has unqualified workflow: %q", script)
+	for _, workflow := range []string{"release.yaml", ".github/workflows/release.yaml", "owner/repo/.github/workflows/release.yaml"} {
+		script, err := generate(config{
+			repository:   "owner/repo",
+			workflow:     workflow,
+			verification: "none",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(script, "WORKFLOW='owner/repo/.github/workflows/release.yaml'") {
+			t.Errorf("workflow %q generated an unqualified path", workflow)
+		}
 	}
 }
