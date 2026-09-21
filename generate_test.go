@@ -1,7 +1,8 @@
-package main
+package insmith
 
 import (
 	"bytes"
+	"context"
 	"strings"
 	"testing"
 )
@@ -71,11 +72,26 @@ func TestShellQuote(t *testing.T) {
 
 func TestRunHelp(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if err := run([]string{"generate", "-h"}, &stdout, &stderr); err != nil {
+	if err := runGenerate([]string{"-h"}, &stdout, &stderr); err != nil {
 		t.Fatalf("run help: %v", err)
 	}
 	if !strings.Contains(stderr.String(), "Usage of insmith generate:") {
 		t.Errorf("help output = %q", stderr.String())
+	}
+}
+
+func TestRunGenerate(t *testing.T) {
+	for _, args := range [][]string{
+		{"generate", "--verification=none", "owner/repo"},
+		{"--verification=none", "owner/repo"},
+	} {
+		var stdout, stderr bytes.Buffer
+		if err := Run(context.Background(), args, &stdout, &stderr); err != nil {
+			t.Fatalf("Run(%q): %v", args, err)
+		}
+		if !strings.Contains(stdout.String(), "REPOSITORY='owner/repo'") {
+			t.Errorf("Run(%q) output = %q", args, stdout.String())
+		}
 	}
 }
 

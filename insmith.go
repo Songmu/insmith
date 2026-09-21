@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 )
 
 const cmdName = "insmith"
@@ -13,6 +14,14 @@ const cmdName = "insmith"
 // Run the insmith
 func Run(ctx context.Context, argv []string, outStream, errStream io.Writer) error {
 	log.SetOutput(errStream)
+	if len(argv) > 0 {
+		if argv[0] == "generate" {
+			return runGenerate(argv[1:], outStream, errStream)
+		}
+		if !strings.HasPrefix(argv[0], "-") || !isGlobalFlag(argv[0]) {
+			return runGenerate(argv, outStream, errStream)
+		}
+	}
 	fs := flag.NewFlagSet(
 		fmt.Sprintf("%s (v%s rev:%s)", cmdName, version, revision), flag.ContinueOnError)
 	fs.SetOutput(errStream)
@@ -24,6 +33,15 @@ func Run(ctx context.Context, argv []string, outStream, errStream io.Writer) err
 		return printVersion(outStream)
 	}
 	return nil
+}
+
+func isGlobalFlag(arg string) bool {
+	switch strings.TrimLeft(arg, "-") {
+	case "h", "help", "version":
+		return true
+	default:
+		return false
+	}
 }
 
 func printVersion(out io.Writer) error {
