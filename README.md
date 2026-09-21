@@ -20,7 +20,7 @@ verify its provenance with GitHub Artifact Attestations or SHA-256 checksums.
 Generate an installer for a conventional GoReleaser-style release:
 
 ```sh
-go run ./cmd/insmith Songmu/gitrail > install.sh
+go run ./cmd/insmith --workflow release-build.yaml Songmu/gitrail > install.sh
 chmod +x install.sh
 ```
 
@@ -28,9 +28,13 @@ Generated installers support Linux and macOS on amd64 and arm64. They select
 `binary_version_os_arch.tar.gz`, `.zip`, or a raw binary, and accept:
 
 ```sh
-INSTALL_DIR="$HOME/bin" ./install.sh
+./install.sh -b "$HOME/bin"
+BINDIR="$HOME/bin" ./install.sh
 ./install.sh v1.2.3
 ```
+
+The default installation directory is `./bin`. Generator flags must precede
+the single `OWNER/REPO` argument.
 
 ## Options
 
@@ -45,12 +49,18 @@ INSTALL_DIR="$HOME/bin" ./install.sh
 Asset patterns may use `{binary}`, `{version}`, `{os}`, and `{arch}`. The
 default verification mode is `attestation-or-checksum`: an unavailable
 attestation capability falls back to SHA-256 verification, while a failed
-attestation aborts installation.
+attestation or an unresolved release tag aborts installation without
+downgrading to checksums.
+
+Generated installers require POSIX `sh`, `curl`, and standard Unix tools.
+They require `tar` or `unzip` for the selected archive format. `git` and a
+safe GitHub CLI version with attestation digest support are optional in the
+default mode; when unavailable, the installer verifies the release checksum.
 
 ## Synopsis
 
-```go
-// simple usage here
+```console
+insmith [flags] OWNER/REPO
 ```
 
 ## Description

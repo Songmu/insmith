@@ -45,5 +45,11 @@ jobs:
         go-version-file: go.mod
     - name: test
       run: go test -race -coverprofile coverage.out -covermode atomic ./...
+    - name: Generate and lint installer
+      if: "matrix.os == 'ubuntu-latest'"
+      run: |
+        go run ./cmd/insmith Songmu/gitrail > generated-install.sh
+        sh -n generated-install.sh
+        shellcheck generated-install.sh
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
