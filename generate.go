@@ -18,7 +18,7 @@ type config struct {
 
 func generate(c config) (string, error) {
 	parts := strings.Split(c.repository, "/")
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+	if len(parts) != 2 || !safeFilename(parts[0]) || !safeFilename(parts[1]) {
 		return "", fmt.Errorf("repository must be in OWNER/REPO form")
 	}
 	if c.binary == "" {
@@ -214,9 +214,9 @@ verify_attestation() {
 	fi
 	[ -n "$commit" ] || return 2
 	if [ -n "$WORKFLOW" ]; then
-		gh attestation verify "$artifact" --repo "$REPOSITORY" --source-digest "$commit" --signer-digest "$commit" --signer-workflow "$WORKFLOW"
+		gh attestation verify "$artifact" --repo "$REPOSITORY" --source-digest "$commit" --signer-digest "$commit" --signer-workflow "$WORKFLOW" || return 1
 	else
-		gh attestation verify "$artifact" --repo "$REPOSITORY" --source-digest "$commit" --signer-digest "$commit"
+		gh attestation verify "$artifact" --repo "$REPOSITORY" --source-digest "$commit" --signer-digest "$commit" || return 1
 	fi
 }
 
@@ -277,13 +277,7 @@ case "$asset_name" in
 		need tar
 		tar_listing=$(tar -tvzf "$artifact") || fail "could not list $asset_name contents"
 		check_archive_symlinks "$tar_listing"
-		# tar -tvzf lines look like:
-		#   -rw-r--r-- user/group 123 2024-01-01 00:00 path/to/name
-		# The first 5 space-free fields (permissions, owner/group, size,
-		# date, time) are stripped so the remaining name survives even if
-		# it contains spaces.
-		tar_names=$(printf '%s\n' "$tar_listing" |
-			awk '{ rest = $0; for (i = 0; i < 5; i++) sub(/^[[:space:]]*[^[:space:]]+/, "", rest); sub(/^[[:space:]]+/, "", rest); print rest }')
+		tar_names=$(tar -tzf "$artifact") || fail "could not list $asset_name contents"
 		while IFS= read -r member; do
 			[ -n "$member" ] || continue
 			check_archive_member "$member"

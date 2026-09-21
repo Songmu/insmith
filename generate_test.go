@@ -18,8 +18,10 @@ func TestGenerateDefaults(t *testing.T) {
 		"WORKFLOW='Songmu/gitrail/.github/workflows/release-build.yaml'",
 		"git ls-remote",
 		"gh attestation verify",
+		"gh attestation verify \"$artifact\" --repo \"$REPOSITORY\" --source-digest \"$commit\" --signer-digest \"$commit\" || return 1",
 		"--proto '=https' --proto-redir '=https' --tlsv1.2",
 		"trap 'rm -rf \"$tmpdir\"' 0 HUP INT TERM",
+		"tar_names=$(tar -tzf \"$artifact\")",
 		"verify_checksum",
 		"INSTALL_DIR=${INSTALL_DIR:-/usr/local/bin}",
 	} {
@@ -45,6 +47,11 @@ func TestGenerateValidation(t *testing.T) {
 	_, err = generate(config{repository: "owner/repo", checksumPattern: "bad/path", verification: "checksum"})
 	if err == nil {
 		t.Error("generate accepted an unsafe checksum pattern")
+	}
+	for _, repository := range []string{"owner/repo?foo=bar", "owner/repo#fragment", "own?er/repo", "owner/repo/name"} {
+		if _, err := generate(config{repository: repository, verification: "none"}); err == nil {
+			t.Errorf("generate accepted an invalid repository %q", repository)
+		}
 	}
 }
 
