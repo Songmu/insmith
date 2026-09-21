@@ -36,7 +36,7 @@ func generate(c config) (string, error) {
 	if c.checksumPattern != "" && !safePattern(c.checksumPattern) {
 		return "", fmt.Errorf("checksum pattern contains unsupported characters")
 	}
-	if c.workflow != "" && !strings.HasPrefix(c.workflow, c.repository+"/") {
+	if c.workflow != "" && !strings.Contains(c.workflow, "/.github/workflows/") {
 		c.workflow = strings.TrimPrefix(c.workflow, "/")
 		if !strings.HasPrefix(c.workflow, ".github/workflows/") {
 			c.workflow = ".github/workflows/" + c.workflow
@@ -157,6 +157,7 @@ asset_url_for_name() {
 	done <<-EOF
 	$asset_urls
 	EOF
+	return 0
 }
 
 matches=
@@ -223,11 +224,16 @@ case "$VERIFICATION" in
 	none) ;;
 	checksum) verify_checksum ;;
 	attestation)
-		verify_attestation || {
+		if verify_attestation; then
+			:
+		else
 			status=$?
-			[ "$status" -eq 2 ] && fail "GitHub attestation verification is unavailable"
-			fail "attestation verification failed"
-		}
+			if [ "$status" -eq 2 ]; then
+				fail "GitHub attestation verification is unavailable"
+			else
+				fail "attestation verification failed"
+			fi
+		fi
 		;;
 	attestation-or-checksum)
 		if verify_attestation; then
