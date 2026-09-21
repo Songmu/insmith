@@ -277,6 +277,9 @@ case "$asset_name" in
 		need tar
 		tar_listing=$(tar -tvzf "$artifact") || fail "could not list $asset_name contents"
 		check_archive_symlinks "$tar_listing"
+		# tar -tvzf columns are: permissions, owner/group, size, date, time, name.
+		# Strip the first 5 space-free columns so the remaining name survives
+		# even if it contains spaces.
 		tar_names=$(printf '%s\n' "$tar_listing" |
 			awk '{ rest = $0; for (i = 0; i < 5; i++) sub(/^[[:space:]]*[^[:space:]]+/, "", rest); sub(/^[[:space:]]+/, "", rest); print rest }')
 		while IFS= read -r member; do
