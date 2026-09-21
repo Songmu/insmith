@@ -37,6 +37,10 @@ func TestGenerateValidation(t *testing.T) {
 	if err == nil {
 		t.Error("generate accepted an invalid verification policy")
 	}
+	_, err = generate(config{repository: "owner/repo", binary: "bad/name", verification: "none"})
+	if err == nil {
+		t.Error("generate accepted an unsafe binary name")
+	}
 }
 
 func TestShellQuote(t *testing.T) {
@@ -52,5 +56,19 @@ func TestRunHelp(t *testing.T) {
 	}
 	if !strings.Contains(stderr.String(), "Usage of insmith generate:") {
 		t.Errorf("help output = %q", stderr.String())
+	}
+}
+
+func TestWorkflowPath(t *testing.T) {
+	script, err := generate(config{
+		repository:   "owner/repo",
+		workflow:     ".github/workflows/release.yaml",
+		verification: "none",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(script, "WORKFLOW='owner/repo/.github/workflows/release.yaml'") {
+		t.Errorf("generated script has unqualified workflow: %q", script)
 	}
 }

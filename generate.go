@@ -24,11 +24,18 @@ func generate(c config) (string, error) {
 	if c.binary == "" {
 		c.binary = parts[1]
 	}
+	if !safeFilename(c.binary) {
+		return "", fmt.Errorf("binary must contain only letters, digits, dots, underscores, and hyphens")
+	}
 	if c.assetPattern == "" {
 		c.assetPattern = "{binary}_{version}_{os}_{arch}"
 	}
-	if c.workflow != "" && !strings.Contains(c.workflow, "/") {
-		c.workflow = c.repository + "/.github/workflows/" + c.workflow
+	if c.workflow != "" && !strings.HasPrefix(c.workflow, c.repository+"/") {
+		c.workflow = strings.TrimPrefix(c.workflow, "/")
+		if !strings.HasPrefix(c.workflow, ".github/workflows/") {
+			c.workflow = ".github/workflows/" + c.workflow
+		}
+		c.workflow = c.repository + "/" + c.workflow
 	}
 	switch c.verification {
 	case "attestation", "attestation-or-checksum", "checksum", "none":
@@ -62,6 +69,18 @@ func generate(c config) (string, error) {
 
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+}
+
+func safeFilename(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-') {
+			return false
+		}
+	}
+	return true
 }
 
 var scriptTemplate = template.Must(template.New("install.sh").Parse(`#!/bin/sh
@@ -200,8 +219,11 @@ case "$VERIFICATION" in
 			:
 		else
 			status=$?
-			[ "$status" -eq 2 ] && verify_checksum
-			[ "$status" -eq 2 ] || fail "attestation verification failed"
+			if [ "$status" -eq 2 ]; then
+				verify_checksum
+			else
+				fail "attestation verification failed"
+			fi
 		fi
 		;;
 esac
