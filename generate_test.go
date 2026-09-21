@@ -56,6 +56,11 @@ func TestGenerateValidation(t *testing.T) {
 			t.Errorf("generate accepted an invalid repository %q", repository)
 		}
 	}
+	for _, binary := range []string{".", ".."} {
+		if _, err := generate(config{repository: "owner/repo", binary: binary, verification: "none"}); err == nil {
+			t.Errorf("generate accepted an unsafe binary name %q", binary)
+		}
+	}
 }
 
 func TestShellQuote(t *testing.T) {
