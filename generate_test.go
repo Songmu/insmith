@@ -25,10 +25,13 @@ func TestGenerateDefaults(t *testing.T) {
 		"gh attestation verify",
 		`--source-digest "$commit"`,
 		`--signer-digest "$commit"`,
-		"--proto '=https' --proto-redir '=https' --tlsv1.2",
+		"--proto '=https' --tlsv1.2",
+		"shlib 2026.08.30 - portable shell functions for install scripts",
+		`TAG=$(github_release "$REPOSITORY" "$requested_tag")`,
+		`GITHUB_DOWNLOAD="https://github.com/$REPOSITORY/releases/download"`,
 		"trap cleanup 0",
 		"trap 'exit 1' HUP INT TERM",
-		`""|*[!A-Za-z0-9._+-]*) return 1`,
+		`*[!A-Za-z0-9._+-]* | "")`,
 		"tar_names=$(tar -tzf \"$artifact\")",
 		"h*) fail \"archive contains a hard link entry which is not supported\"",
 		"verify_checksum",
@@ -37,6 +40,9 @@ func TestGenerateDefaults(t *testing.T) {
 		if !strings.Contains(script, want) {
 			t.Errorf("generated script does not contain %q", want)
 		}
+	}
+	if strings.Contains(script, "api.github.com") {
+		t.Error("generated script uses the GitHub API")
 	}
 }
 

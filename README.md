@@ -25,7 +25,8 @@ chmod +x install.sh
 ```
 
 Generated installers support Linux and macOS on amd64 and arm64. They select
-`binary_version_os_arch.tar.gz`, `.zip`, or a raw binary, and accept:
+`binary_version_os_arch.tar.gz`, `.zip`, or a raw binary from direct GitHub
+Release download URLs, and accept:
 
 ```sh
 ./install.sh -b "$HOME/bin"
@@ -52,10 +53,13 @@ attestation capability falls back to SHA-256 verification, while a failed
 attestation or an unresolved release tag aborts installation without
 downgrading to checksums.
 
-Generated installers require POSIX `sh`, `curl`, and standard Unix tools.
-They require `tar` or `unzip` for the selected archive format. `git` and a
-safe GitHub CLI version with attestation digest support are optional in the
-default mode; when unavailable, the installer verifies the release checksum.
+Generated installers include a fixed snapshot of the portable helper
+functions derived from `client9/shlib`. They require POSIX `sh` and standard
+Unix tools, and can download with `curl`, `wget`, `fetch`, `ftp`, Python 3, or
+Node.js. They require `tar` or `unzip` for the selected archive format. `git`
+and a safe GitHub CLI version with attestation digest support are optional in
+the default mode; when unavailable, the installer verifies the release
+checksum.
 
 ## Synopsis
 

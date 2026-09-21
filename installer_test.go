@@ -233,11 +233,11 @@ func TestGeneratedInstallerRejectsInvalidChecksums(t *testing.T) {
 		checksums string
 		want      string
 	}{
-		{name: "missing", checksums: validHash + "  other\n", want: "must appear exactly once"},
+		{name: "missing", checksums: validHash + "  other\n", want: "unable to find checksum"},
 		{
 			name:      "duplicate",
 			checksums: validHash + "  " + assetName + "\n" + validHash + "  ./" + assetName + "\n",
-			want:      "must appear exactly once",
+			want:      "multiple checksums",
 		},
 		{name: "mismatch", checksums: strings.Repeat("0", 64) + "  " + assetName + "\n", want: "checksum verification failed"},
 	}
@@ -266,11 +266,10 @@ func TestGeneratedInstallerRejectsAmbiguousAssets(t *testing.T) {
 	artifact := filepath.Join(t.TempDir(), assetName)
 	writeTarGz(t, artifact, []archiveEntry{{name: "repo", body: "binary"}})
 	env, _ := installerEnvironment(t, artifact, assetName, version)
-	writeFile(t, envValue(env, "RELEASE_JSON"), fmt.Sprintf(
-		"  \"browser_download_url\": \"https://downloads.example/%s\"\n"+
-			"  \"browser_download_url\": \"https://downloads.example/repo_%s_linux_amd64.zip\"\n",
-		assetName, version,
-	), 0o644)
+	assetName2 := "repo_" + version + "_linux_amd64.zip"
+	artifact2 := filepath.Join(t.TempDir(), assetName2)
+	writeZip(t, artifact2, []archiveEntry{{name: "repo", body: "binary"}})
+	env = append(env, "ARTIFACT_NAME_2="+assetName2, "ARTIFACT_2="+artifact2)
 	result := runGeneratedInstaller(t, config{
 		repository:   "owner/repo",
 		verification: "none",
@@ -416,14 +415,8 @@ func installerEnvironment(t *testing.T, artifact, assetName, version string) ([]
 		t.Fatal(err)
 	}
 	curlLog := filepath.Join(dir, "curl.log")
-	releaseJSON := filepath.Join(dir, "release.json")
 	checksums := filepath.Join(dir, "SHA256SUMS")
 	sum := sha256File(t, artifact)
-	writeFile(t, releaseJSON, fmt.Sprintf(
-		"  \"browser_download_url\": \"https://downloads.example/%s\"\n"+
-			"  \"browser_download_url\": \"https://downloads.example/SHA256SUMS\"\n",
-		assetName,
-	), 0o644)
 	writeFile(t, checksums, fmt.Sprintf("%x  %s\n", sum, assetName), 0o644)
 	writeCommand(t, fakeBin, "uname", `
 case "$1" in
@@ -445,17 +438,22 @@ url=
 while [ "$#" -gt 0 ]; do
 	case "$1" in
 		-o) out=$2; shift 2 ;;
-		--proto|--proto-redir) shift 2 ;;
+		--proto|-H) shift 2 ;;
 		--tlsv1.2|-fsSL) shift ;;
 		*) url=$1; shift ;;
 	esac
 done
 printf '%s\n' "$url" >> "$CURL_LOG"
 case "$url" in
-	*/releases/latest) printf '  "tag_name": "%s"\n' "$FAKE_TAG" ;;
-	*/releases/tags/*) cat "$RELEASE_JSON" ;;
-	*/"$ARTIFACT_NAME") cp "$ARTIFACT" "$out" ;;
-	*/SHA256SUMS) cp "$CHECKSUMS" "$out" ;;
+	*/releases/latest|*/releases/"$FAKE_TAG")
+		printf '{"tag_name":"%s"}\n' "$FAKE_TAG" > "$out"
+		;;
+	*/releases/download/*/"$ARTIFACT_NAME") cp "$ARTIFACT" "$out" ;;
+	*/releases/download/*/"$ARTIFACT_NAME_2")
+		[ -n "${ARTIFACT_2:-}" ] || exit 1
+		cp "$ARTIFACT_2" "$out"
+		;;
+	*/releases/download/*/SHA256SUMS) cp "$CHECKSUMS" "$out" ;;
 	*) exit 1 ;;
 esac
 `)
@@ -469,8 +467,8 @@ esac
 		"FAKE_TAG=" + version,
 		"ARTIFACT=" + artifact,
 		"ARTIFACT_NAME=" + assetName,
+		"ARTIFACT_NAME_2=",
 		"CHECKSUMS=" + checksums,
-		"RELEASE_JSON=" + releaseJSON,
 		"CURL_LOG=" + curlLog,
 	}
 	return env, curlLog
