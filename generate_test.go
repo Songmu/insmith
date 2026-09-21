@@ -6,7 +6,7 @@ import (
 )
 
 func TestGenerateDefaults(t *testing.T) {
-	script, err := generate(config{repository: "Songmu/gitrail", checksumPattern: "checksums.txt", verification: "attestation-or-checksum"})
+	script, err := generate(config{repository: "Songmu/gitrail", workflow: "release-build.yaml", checksumPattern: "SHA256SUMS", verification: "attestation-or-checksum"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -14,8 +14,10 @@ func TestGenerateDefaults(t *testing.T) {
 		"REPOSITORY='Songmu/gitrail'",
 		"BINARY='gitrail'",
 		"ASSET_PATTERN='{binary}_{version}_{os}_{arch}'",
+		"WORKFLOW='Songmu/gitrail/.github/workflows/release-build.yaml'",
 		"git ls-remote",
 		"gh attestation verify",
+		"--proto '=https' --tlsv1.2",
 		"verify_checksum",
 		"INSTALL_DIR=${INSTALL_DIR:-/usr/local/bin}",
 	} {
