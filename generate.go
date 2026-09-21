@@ -18,7 +18,8 @@ type config struct {
 
 func generate(c config) (string, error) {
 	parts := strings.Split(c.repository, "/")
-	if len(parts) != 2 || !safeFilename(parts[0]) || !safeFilename(parts[1]) {
+	if len(parts) != 2 || !safeFilename(parts[0]) || !safeFilename(parts[1]) ||
+		parts[0] == "." || parts[0] == ".." || parts[1] == "." || parts[1] == ".." {
 		return "", fmt.Errorf("repository must be in OWNER/REPO form")
 	}
 	if c.binary == "" {
@@ -119,7 +120,7 @@ need() {
 }
 
 validate_tag() {
-	case "$1" in *[!A-Za-z0-9._-]*) return 1 ;; esac
+	case "$1" in *[!A-Za-z0-9._+-]*) return 1 ;; esac
 }
 
 need curl
@@ -174,7 +175,8 @@ asset_url=$matches
 asset_name=${asset_url##*/}
 
 tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/insmith.XXXXXX") || fail "could not create temporary directory"
-trap 'rm -rf "$tmpdir"' 0 HUP INT TERM
+trap 'rm -rf "$tmpdir"' 0
+trap 'exit 1' HUP INT TERM
 artifact="$tmpdir/$asset_name"
 curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL "$asset_url" -o "$artifact" || fail "could not download $asset_name"
 
@@ -263,6 +265,7 @@ check_archive_symlinks() {
 	while IFS= read -r line; do
 		case "$line" in
 			l*) fail "archive contains a symlink entry which is not supported" ;;
+			h*) fail "archive contains a hard link entry which is not supported" ;;
 		esac
 	done <<-EOF
 	$1
