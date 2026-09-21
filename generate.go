@@ -85,20 +85,19 @@ need() {
 	command -v "$1" >/dev/null 2>&1 || fail "required command not found: $1"
 }
 
-urlencode_tag() {
-	# GitHub release tags conventionally require no encoding. Reject unsafe input instead.
-	case "$1" in *[!A-Za-z0-9._/-]*) fail "unsupported version: $1" ;; esac
+validate_tag() {
+	case "$1" in *[!A-Za-z0-9._-]*) fail "unsupported version: $1" ;; esac
 	printf '%s' "$1"
 }
 
+need curl
 version=${1:-}
 if [ -z "$version" ]; then
-	need curl
 	version=$(curl --proto '=https' --tlsv1.2 -fsSL "https://api.github.com/repos/$REPOSITORY/releases/latest" |
 		sed -n 's/^[[:space:]]*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
 	[ -n "$version" ] || fail "could not determine the latest release"
 fi
-tag=$(urlencode_tag "$version")
+tag=$(validate_tag "$version")
 
 case $(uname -s) in
 	Linux) os=linux ;;
@@ -118,10 +117,19 @@ release_json=$(curl --proto '=https' --tlsv1.2 -fsSL "$release_api") || fail "co
 asset_urls=$(printf '%s\n' "$release_json" |
 	sed -n 's/^[[:space:]]*"browser_download_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 
+asset_url_for_name() {
+	wanted=$1
+	while IFS= read -r url; do
+		[ "${url##*/}" = "$wanted" ] && printf '%s\n' "$url"
+	done <<-EOF
+	$asset_urls
+	EOF
+}
+
 matches=
 for extension in .tar.gz .zip ''; do
 	candidate=$asset_base$extension
-	found=$(printf '%s\n' "$asset_urls" | grep "/$candidate$" || true)
+	found=$(asset_url_for_name "$candidate")
 	[ -z "$found" ] || matches="${matches}${matches:+
 }$found"
 done
@@ -139,7 +147,7 @@ curl --proto '=https' --tlsv1.2 -fsSL "$asset_url" -o "$artifact" || fail "could
 verify_checksum() {
 	checksum_name=$(printf '%s' "$CHECKSUM_PATTERN" |
 		sed -e "s/{version}/$version/g" -e "s/{binary}/$BINARY/g")
-	checksum_url=$(printf '%s\n' "$asset_urls" | grep "/$checksum_name$" || true)
+	checksum_url=$(asset_url_for_name "$checksum_name")
 	[ "$(printf '%s\n' "$checksum_url" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 1 ] ||
 		fail "could not find a unique checksum asset named $checksum_name"
 	checksums="$tmpdir/$checksum_name"
