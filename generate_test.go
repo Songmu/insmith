@@ -34,6 +34,7 @@ func TestGenerateDefaults(t *testing.T) {
 		"The only behavioral divergence from v2026.08.30 is in http_download_curl",
 		`TAG=$(github_release "$REPOSITORY" "$requested_tag")`,
 		`GITHUB_DOWNLOAD="https://github.com/$REPOSITORY/releases/download"`,
+		`darwin|windows) extensions='.zip .tar.gz .exe raw'`,
 		`windows/amd64|windows/arm64`,
 		`platform_binary_name`,
 		"trap cleanup 0",

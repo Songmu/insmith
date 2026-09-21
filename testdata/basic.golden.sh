@@ -656,24 +656,29 @@ check_zip_types() {
 download_artifact() {
 	asset_base=$(printf '%s' "$ASSET_PATTERN" |
 		sed -e "s/{name}/$NAME/g" -e "s/{version}/$TAG/g" -e "s/{os}/$OS/g" -e "s/{arch}/$ARCH/g")
-	found=0
-	for extension in .tar.gz .zip .exe ''; do
+	case "$OS" in
+		darwin|windows) extensions='.zip .tar.gz .exe raw' ;;
+		*) extensions='.tar.gz .zip .exe raw' ;;
+	esac
+	for extension in $extensions; do
 		if [ "$extension" = ".exe" ] && [ "$OS" != "windows" ]; then
 			continue
+		fi
+		if [ "$extension" = "raw" ]; then
+			extension=
 		fi
 		candidate=$asset_base$extension
 		candidate_url="$GITHUB_DOWNLOAD/$TAG/$candidate"
 		candidate_artifact="$tmpdir/$candidate"
 		if http_download "$candidate_artifact" "$candidate_url" 2>/dev/null; then
-			found=$((found + 1))
 			artifact=$candidate_artifact
 			asset_name=$candidate
+			return
 		else
 			rm -f "$candidate_artifact"
 		fi
 	done
-	[ "$found" -eq 1 ] ||
-		fail "could not download a unique asset matching $asset_base (.tar.gz, .zip, .exe, or raw binary)"
+	fail "could not download an asset matching $asset_base (.tar.gz, .zip, .exe, or raw binary)"
 }
 
 extract_artifact() {

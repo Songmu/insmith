@@ -40,8 +40,10 @@ func TestGeneratedInstallerFormats(t *testing.T) {
 	}{
 		{name: "tar latest with flag", goos: "Linux", normalized: "linux", arch: "x86_64", extension: ".tar.gz", latest: true},
 		{name: "zip explicit with env", goos: "Darwin", normalized: "darwin", arch: "arm64", extension: ".zip", useBindEnv: true, fatZip: true},
+		{name: "darwin tar fallback", goos: "Darwin", normalized: "darwin", arch: "x86_64", extension: ".tar.gz"},
 		{name: "raw explicit with default", goos: "Linux", normalized: "linux", arch: "aarch64", defaultBin: true},
 		{name: "windows zip", goos: "MINGW64_NT-10.0", normalized: "windows", arch: "x86_64", extension: ".zip"},
+		{name: "windows tar fallback", goos: "MINGW64_NT-10.0", normalized: "windows", arch: "arm64", extension: ".tar.gz"},
 		{name: "windows raw exe", goos: "MSYS_NT-10.0", normalized: "windows", arch: "arm64", extension: ".exe"},
 	}
 	for _, tt := range tests {
@@ -402,25 +404,68 @@ func TestGeneratedInstallerRejectsInvalidChecksums(t *testing.T) {
 	}
 }
 
-func TestGeneratedInstallerRejectsAmbiguousAssets(t *testing.T) {
+func TestGeneratedInstallerArchivePriority(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("generated installers target POSIX sh on Linux and macOS")
 	}
 	const version = "v1.2.3"
-	assetName := "repo_" + version + "_linux_amd64.tar.gz"
-	artifact := filepath.Join(t.TempDir(), assetName)
-	writeTarGz(t, artifact, []archiveEntry{{name: "repo", body: "binary"}})
-	env, _ := installerEnvironment(t, artifact, assetName, version)
-	assetName2 := "repo_" + version + "_linux_amd64.zip"
-	artifact2 := filepath.Join(t.TempDir(), assetName2)
-	writeZip(t, artifact2, []archiveEntry{{name: "repo", body: "binary"}})
-	env = append(env, "ARTIFACT_NAME_2="+assetName2, "ARTIFACT_2="+artifact2)
-	result := runGeneratedInstaller(t, config{
-		repository:   "owner/repo",
-		verification: "none",
-	}, env, "-b", filepath.Join(t.TempDir(), "bin"), version)
-	if result.err == nil || !strings.Contains(result.output, "unique asset") {
-		t.Fatalf("result = %v\n%s", result.err, result.output)
+	tests := []struct {
+		name       string
+		unameOS    string
+		normalized string
+		executable string
+		preferred  string
+		wantBody   string
+	}{
+		{name: "linux prefers tar", unameOS: "Linux", normalized: "linux", executable: "repo", preferred: ".tar.gz", wantBody: "tar"},
+		{name: "darwin prefers zip", unameOS: "Darwin", normalized: "darwin", executable: "repo", preferred: ".zip", wantBody: "zip"},
+		{name: "windows prefers zip", unameOS: "MINGW64_NT-10.0", normalized: "windows", executable: "repo.exe", preferred: ".zip", wantBody: "zip"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assetBase := "repo_" + version + "_" + tt.normalized + "_amd64"
+			tarName := assetBase + ".tar.gz"
+			tarArtifact := filepath.Join(t.TempDir(), tarName)
+			writeTarGz(t, tarArtifact, []archiveEntry{{name: tt.executable, body: "tar"}})
+			zipName := assetBase + ".zip"
+			zipArtifact := filepath.Join(t.TempDir(), zipName)
+			writeZip(t, zipArtifact, []archiveEntry{{name: tt.executable, body: "zip"}})
+			env, curlLog := installerEnvironment(t, tarArtifact, tarName, version)
+			env = append(env,
+				"ARTIFACT_NAME_2="+zipName,
+				"ARTIFACT_2="+zipArtifact,
+				"FAKE_UNAME_S="+tt.unameOS,
+			)
+			bindir := filepath.Join(t.TempDir(), "bin")
+			result := runGeneratedInstaller(t, config{
+				repository:   "owner/repo",
+				verification: "none",
+			}, env, "-b", bindir, version)
+			if result.err != nil {
+				t.Fatalf("installer failed: %v\n%s", result.err, result.output)
+			}
+			got, err := os.ReadFile(filepath.Join(bindir, tt.executable))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got) != tt.wantBody {
+				t.Fatalf("installed body = %q, want %q", got, tt.wantBody)
+			}
+			logged, err := os.ReadFile(curlLog)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(logged), assetBase+tt.preferred) {
+				t.Fatalf("preferred artifact was not requested:\n%s", logged)
+			}
+			other := ".zip"
+			if tt.preferred == ".zip" {
+				other = ".tar.gz"
+			}
+			if strings.Contains(string(logged), assetBase+other) {
+				t.Fatalf("lower-priority artifact was requested after success:\n%s", logged)
+			}
+		})
 	}
 }
 

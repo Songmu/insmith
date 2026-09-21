@@ -51,6 +51,9 @@ The default installation directory is `./bin`. Generator flags must precede
 the single `OWNER/REPO` argument. Generated installers accept `-d` for shlib
 debug logging and `-x` for the shell's command execution trace.
 
+When both archive formats exist, Linux prefers `.tar.gz`, while macOS and
+Windows prefer `.zip`. The other archive format remains a fallback.
+
 ## Options
 
 ```text
