@@ -259,7 +259,7 @@ check_archive_member() {
 	esac
 }
 
-check_archive_types() {
+check_archive_symlinks() {
 	while IFS= read -r line; do
 		case "$line" in
 			l*) fail "archive contains a symlink entry which is not supported" ;;
@@ -275,15 +275,16 @@ mkdir -p "$extractdir" || fail "could not create extraction directory"
 case "$asset_name" in
 	*.tar.gz)
 		need tar
-		tar_names=$(tar -tzf "$artifact") || fail "could not list $asset_name contents"
+		tar_listing=$(tar -tvzf "$artifact") || fail "could not list $asset_name contents"
+		check_archive_symlinks "$tar_listing"
+		tar_names=$(printf '%s\n' "$tar_listing" |
+			awk '{ rest = $0; for (i = 0; i < 5; i++) sub(/^[[:space:]]*[^[:space:]]+/, "", rest); sub(/^[[:space:]]+/, "", rest); print rest }')
 		while IFS= read -r member; do
 			[ -n "$member" ] || continue
 			check_archive_member "$member"
 		done <<-EOF
 		$tar_names
 		EOF
-		tar_types=$(tar -tvzf "$artifact") || fail "could not list $asset_name contents"
-		check_archive_types "$tar_types"
 		tar -xzf "$artifact" -C "$extractdir"
 		;;
 	*.zip)
@@ -296,7 +297,7 @@ case "$asset_name" in
 		$zip_names
 		EOF
 		zip_types=$(unzip -Z -s "$artifact") || fail "could not list $asset_name contents"
-		check_archive_types "$zip_types"
+		check_archive_symlinks "$zip_types"
 		unzip -q "$artifact" -d "$extractdir"
 		;;
 	*)
