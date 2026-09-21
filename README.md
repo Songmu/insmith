@@ -54,6 +54,10 @@ debug logging and `-x` for the shell's command execution trace.
 When both archive formats exist, Linux prefers `.tar.gz`, while macOS and
 Windows prefer `.zip`. The other archive format remains a fallback.
 
+Each binary is prepared with `install -m 0755` in a temporary file inside
+`BINDIR`, then atomically renamed over its destination. All configured
+binaries are prepared before any destination is replaced.
+
 ## Options
 
 ```text

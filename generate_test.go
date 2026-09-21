@@ -44,6 +44,8 @@ func TestGenerateDefaults(t *testing.T) {
 		"h*) fail \"archive contains a hard link entry which is not supported\"",
 		"verify_checksum",
 		`install -d "$BINDIR"`,
+		`install -m 0755 "$executable" "$install_tmp"`,
+		`mv -f "$install_tmp" "$install_destination"`,
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("generated script does not contain %q", want)

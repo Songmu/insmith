@@ -193,6 +193,132 @@ func TestGeneratedInstallerDebugOptions(t *testing.T) {
 	}
 }
 
+func TestGeneratedInstallerUsesAtomicInstall(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("generated installers target POSIX sh environments")
+	}
+	const version = "v1.2.3"
+	assetName := "repo_" + version + "_linux_amd64"
+	artifact := filepath.Join(t.TempDir(), assetName)
+	writeFile(t, artifact, "new", 0o644)
+	env, _ := installerEnvironment(t, artifact, assetName, version)
+	fakeBin := envValue(env, "FAKE_BIN")
+	realInstall, err := exec.LookPath("install")
+	if err != nil {
+		t.Fatal(err)
+	}
+	realMV, err := exec.LookPath("mv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(t.TempDir(), "install.log")
+	env = append(env,
+		"ATOMIC_INSTALL_LOG="+logPath,
+		"REAL_INSTALL="+realInstall,
+		"REAL_MV="+realMV,
+	)
+	writeCommand(t, fakeBin, "install", `
+printf 'install' >> "$ATOMIC_INSTALL_LOG"
+for arg do
+	printf '|%s' "$arg" >> "$ATOMIC_INSTALL_LOG"
+done
+printf '\n' >> "$ATOMIC_INSTALL_LOG"
+if [ "${FAIL_ATOMIC_INSTALL:-}" = "1" ] && [ "${1:-}" = "-m" ]; then
+	printf 'partial' > "$4"
+	exit 1
+fi
+exec "$REAL_INSTALL" "$@"
+`)
+	writeCommand(t, fakeBin, "mv", `
+printf 'mv' >> "$ATOMIC_INSTALL_LOG"
+for arg do
+	printf '|%s' "$arg" >> "$ATOMIC_INSTALL_LOG"
+done
+printf '\n' >> "$ATOMIC_INSTALL_LOG"
+exec "$REAL_MV" "$@"
+`)
+	bindir := filepath.Join(t.TempDir(), "bin")
+	if err := os.MkdirAll(bindir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(bindir, "repo")
+	writeFile(t, destination, "old", 0o755)
+	result := runGeneratedInstaller(t, config{
+		repository:   "owner/repo",
+		verification: "none",
+	}, env, "-b", bindir, version)
+	if result.err != nil {
+		t.Fatalf("installer failed: %v\n%s", result.err, result.output)
+	}
+	got, err := os.ReadFile(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "new" {
+		t.Fatalf("installed body = %q", got)
+	}
+	info, err := os.Stat(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o755 {
+		t.Fatalf("installed mode = %o", info.Mode().Perm())
+	}
+	logged, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(logged)), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("install log = %q", logged)
+	}
+	if !strings.HasPrefix(lines[0], "install|-d|") {
+		t.Fatalf("destination directory was not created with install: %q", lines[0])
+	}
+	prepare := strings.Split(lines[1], "|")
+	if len(prepare) != 5 || prepare[0] != "install" || prepare[1] != "-m" || prepare[2] != "0755" {
+		t.Fatalf("binary was not prepared with install -m 0755: %q", lines[1])
+	}
+	staging := prepare[4]
+	if filepath.Dir(staging) != bindir || staging == destination {
+		t.Fatalf("staging path %q is not a distinct file in %q", staging, bindir)
+	}
+	commit := strings.Split(lines[2], "|")
+	if len(commit) != 4 || commit[0] != "mv" || commit[1] != "-f" ||
+		commit[2] != staging || commit[3] != destination {
+		t.Fatalf("destination was not atomically replaced from staging: %q", lines[2])
+	}
+
+	failureBindir := filepath.Join(t.TempDir(), "bin")
+	if err := os.MkdirAll(failureBindir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	failureDestination := filepath.Join(failureBindir, "repo")
+	writeFile(t, failureDestination, "existing", 0o755)
+	failureEnv := append(env, "FAIL_ATOMIC_INSTALL=1")
+	failure := runGeneratedInstaller(t, config{
+		repository:   "owner/repo",
+		verification: "none",
+	}, failureEnv, "-b", failureBindir, version)
+	if failure.err == nil || !strings.Contains(failure.output, "could not prepare repo") {
+		t.Fatalf("result = %v\n%s", failure.err, failure.output)
+	}
+	unchanged, err := os.ReadFile(failureDestination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(unchanged) != "existing" {
+		t.Fatalf("failed install changed destination to %q", unchanged)
+	}
+	stagingFiles, err := filepath.Glob(filepath.Join(failureBindir, ".repo.*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stagingFiles) != 0 {
+		t.Fatalf("failed install left staging files: %v", stagingFiles)
+	}
+}
+
 func TestGeneratedInstallerMultipleBinaries(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("generated installers target POSIX sh environments")

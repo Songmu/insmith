@@ -731,6 +731,17 @@ platform_binary_name() {
 	fi
 }
 
+prepare_install() {
+	executable=$1
+	executable_name=$2
+	install_tmp=$(mktemp "${BINDIR%/}/.${executable_name}.XXXXXX") ||
+		fail "could not create temporary file in $BINDIR"
+	printf '%s\t%s\n' "$install_tmp" "$BINDIR/$executable_name" >> "$install_manifest" ||
+		fail "could not record temporary install for $executable_name"
+	install -m 0755 "$executable" "$install_tmp" ||
+		fail "could not prepare $executable_name"
+}
+
 prepare_binaries() {
 	need install
 	need mv
@@ -749,15 +760,11 @@ prepare_binaries() {
 				fail "archive must contain exactly one executable named $executable_name"
 			executable=$executables
 		fi
-		install_tmp=$(mktemp "${BINDIR%/}/.${executable_name}.XXXXXX") ||
-			fail "could not create temporary file in $BINDIR"
-		install -m 0755 "$executable" "$install_tmp" ||
-			fail "could not prepare $executable_name"
-		printf '%s\t%s\n' "$install_tmp" "$BINDIR/$executable_name" >> "$install_manifest"
+		prepare_install "$executable" "$executable_name"
 	done
 }
 
-install_binaries() {
+commit_installs() {
 	tab=$(printf '\t')
 	while IFS="$tab" read -r install_tmp install_destination; do
 		mv -f "$install_tmp" "$install_destination" ||
@@ -794,7 +801,7 @@ main() {
 	verify_artifact
 	extract_artifact
 	prepare_binaries
-	install_binaries
+	commit_installs
 
 	cleanup
 	trap - 0 HUP INT TERM
