@@ -654,7 +654,10 @@ download_artifact() {
 	asset_base=$(printf '%s' "$ASSET_PATTERN" |
 		sed -e "s/{binary}/$BINARY/g" -e "s/{version}/$TAG/g" -e "s/{os}/$OS/g" -e "s/{arch}/$ARCH/g")
 	found=0
-	for extension in .tar.gz .zip ''; do
+	for extension in .tar.gz .zip .exe ''; do
+		if [ "$extension" = ".exe" ] && [ "$OS" != "windows" ]; then
+			continue
+		fi
 		candidate=$asset_base$extension
 		candidate_url="$GITHUB_DOWNLOAD/$TAG/$candidate"
 		candidate_artifact="$tmpdir/$candidate"
@@ -667,7 +670,7 @@ download_artifact() {
 		fi
 	done
 	[ "$found" -eq 1 ] ||
-		fail "could not download a unique asset matching $asset_base (.tar.gz, .zip, or raw binary)"
+		fail "could not download a unique asset matching $asset_base (.tar.gz, .zip, .exe, or raw binary)"
 }
 
 extract_artifact() {
@@ -707,9 +710,9 @@ extract_artifact() {
 			;;
 	esac
 	if [ -z "$executable" ]; then
-		executables=$(find "$extractdir" -type f -name "$BINARY" -print)
+		executables=$(find "$extractdir" -type f -name "$EXECUTABLE_NAME" -print)
 		[ "$(printf '%s\n' "$executables" | line_count)" -eq 1 ] ||
-			fail "archive must contain exactly one executable named $BINARY"
+			fail "archive must contain exactly one executable named $EXECUTABLE_NAME"
 		executable=$executables
 	fi
 }
@@ -720,10 +723,10 @@ install_artifact() {
 	install -d "$BINDIR" || fail "could not create $BINDIR"
 	install_tmp=$(mktemp "${BINDIR%/}/.${BINARY}.XXXXXX") ||
 		fail "could not create temporary file in $BINDIR"
-	install -m 0755 "$executable" "$install_tmp" || fail "could not prepare $BINARY"
-	mv -f "$install_tmp" "$BINDIR/$BINARY" || fail "could not install $BINARY"
+	install -m 0755 "$executable" "$install_tmp" || fail "could not prepare $EXECUTABLE_NAME"
+	mv -f "$install_tmp" "$BINDIR/$EXECUTABLE_NAME" || fail "could not install $EXECUTABLE_NAME"
 	install_tmp=
-	printf 'Installed %s to %s\n' "$BINARY" "$BINDIR/$BINARY"
+	printf 'Installed %s to %s\n' "$EXECUTABLE_NAME" "$BINDIR/$EXECUTABLE_NAME"
 }
 
 main() {
@@ -737,9 +740,13 @@ main() {
 	OS=$(uname_os)
 	ARCH=$(uname_arch)
 	case "$OS/$ARCH" in
-		linux/amd64|linux/arm64|darwin/amd64|darwin/arm64) ;;
+		linux/amd64|linux/arm64|darwin/amd64|darwin/arm64|windows/amd64|windows/arm64) ;;
 		*) fail "unsupported platform: $OS/$ARCH" ;;
 	esac
+	EXECUTABLE_NAME=$BINARY
+	if [ "$OS" = "windows" ]; then
+		EXECUTABLE_NAME="${BINARY}.exe"
+	fi
 	GITHUB_DOWNLOAD="https://github.com/$REPOSITORY/releases/download"
 
 	tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/insmith.XXXXXX") ||

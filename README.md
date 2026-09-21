@@ -24,9 +24,10 @@ go run ./cmd/insmith --workflow release-build.yaml Songmu/gitrail > install.sh
 chmod +x install.sh
 ```
 
-Generated installers support Linux and macOS on amd64 and arm64. They select
-`binary_version_os_arch.tar.gz`, `.zip`, or a raw binary from direct GitHub
-Release download URLs, and accept:
+Generated installers support Linux, macOS, and Windows on amd64 and arm64.
+Windows installation runs under a POSIX-compatible shell such as Git Bash,
+MSYS2, or Cygwin. Installers select `binary_version_os_arch.tar.gz`, `.zip`,
+`.exe`, or a raw binary from direct GitHub Release download URLs, and accept:
 
 ```sh
 ./install.sh -b "$HOME/bin"

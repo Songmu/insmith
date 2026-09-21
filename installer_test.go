@@ -30,6 +30,7 @@ func TestGeneratedInstallerFormats(t *testing.T) {
 	tests := []struct {
 		name       string
 		goos       string
+		normalized string
 		arch       string
 		extension  string
 		latest     bool
@@ -37,14 +38,16 @@ func TestGeneratedInstallerFormats(t *testing.T) {
 		defaultBin bool
 		fatZip     bool
 	}{
-		{name: "tar latest with flag", goos: "Linux", arch: "x86_64", extension: ".tar.gz", latest: true},
-		{name: "zip explicit with env", goos: "Darwin", arch: "arm64", extension: ".zip", useBindEnv: true, fatZip: true},
-		{name: "raw explicit with default", goos: "Linux", arch: "aarch64", defaultBin: true},
+		{name: "tar latest with flag", goos: "Linux", normalized: "linux", arch: "x86_64", extension: ".tar.gz", latest: true},
+		{name: "zip explicit with env", goos: "Darwin", normalized: "darwin", arch: "arm64", extension: ".zip", useBindEnv: true, fatZip: true},
+		{name: "raw explicit with default", goos: "Linux", normalized: "linux", arch: "aarch64", defaultBin: true},
+		{name: "windows zip", goos: "MINGW64_NT-10.0", normalized: "windows", arch: "x86_64", extension: ".zip"},
+		{name: "windows raw exe", goos: "MSYS_NT-10.0", normalized: "windows", arch: "arm64", extension: ".exe"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			version := "v1.2.3"
-			assetName := "repo_" + version + "_" + strings.ToLower(tt.goos) + "_"
+			assetName := "repo_" + version + "_" + tt.normalized + "_"
 			if tt.arch == "x86_64" {
 				assetName += "amd64"
 			} else {
@@ -53,11 +56,15 @@ func TestGeneratedInstallerFormats(t *testing.T) {
 			assetName += tt.extension
 			artifact := filepath.Join(t.TempDir(), assetName)
 			wantBody := "#!/bin/sh\necho installed\n"
+			executableName := "repo"
+			if tt.normalized == "windows" {
+				executableName += ".exe"
+			}
 			switch tt.extension {
 			case ".tar.gz":
-				writeTarGz(t, artifact, []archiveEntry{{name: "repo_" + version + "/repo", body: wantBody}})
+				writeTarGz(t, artifact, []archiveEntry{{name: "repo_" + version + "/" + executableName, body: wantBody}})
 			case ".zip":
-				writeZip(t, artifact, []archiveEntry{{name: "repo_" + version + "/repo", body: wantBody, fat: tt.fatZip}})
+				writeZip(t, artifact, []archiveEntry{{name: "repo_" + version + "/" + executableName, body: wantBody, fat: tt.fatZip}})
 			default:
 				writeFile(t, artifact, wantBody, 0o755)
 			}
@@ -88,7 +95,7 @@ func TestGeneratedInstallerFormats(t *testing.T) {
 			if result.err != nil {
 				t.Fatalf("installer failed: %v\n%s", result.err, result.output)
 			}
-			got, err := os.ReadFile(filepath.Join(bindir, "repo"))
+			got, err := os.ReadFile(filepath.Join(bindir, executableName))
 			if err != nil {
 				t.Fatal(err)
 			}

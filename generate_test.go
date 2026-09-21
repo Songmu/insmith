@@ -33,6 +33,8 @@ func TestGenerateDefaults(t *testing.T) {
 		"The only behavioral divergence from v2026.08.30 is in http_download_curl",
 		`TAG=$(github_release "$REPOSITORY" "$requested_tag")`,
 		`GITHUB_DOWNLOAD="https://github.com/$REPOSITORY/releases/download"`,
+		`windows/amd64|windows/arm64`,
+		`EXECUTABLE_NAME="${BINARY}.exe"`,
 		"trap cleanup 0",
 		"trap 'exit 1' HUP INT TERM",
 		`*[!A-Za-z0-9._+-]* | "")`,
