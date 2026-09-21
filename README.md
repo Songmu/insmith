@@ -63,7 +63,7 @@ binaries are prepared before any destination is replaced.
 ```text
 --name NAME
 --binary NAME  # repeatable; defaults to --name
---workflow PATH
+--workflow PATH  # default: release-build.yaml; empty disables workflow pinning
 --asset-pattern PATTERN
 --checksum-pattern PATTERN  # default: SHA256SUMS
 --verification attestation|attestation-or-checksum|checksum|none
@@ -76,9 +76,16 @@ binary. Asset and checksum patterns may use `{name}`, `{version}`, `{os}`, and
 `{arch}`. A raw, unarchived release asset can install only one binary.
 
 The default verification mode is `attestation-or-checksum`: an unavailable
-attestation capability falls back to SHA-256 verification, while a failed
-attestation or an unresolved release tag aborts installation without
-downgrading to checksums.
+attestation capability (including a missing `gh`/`git`, `gh` older than 2.93,
+or missing digest flags) falls back to SHA-256 verification. Once attestation
+verification is attempted, a failed attestation or unresolved release tag
+aborts installation without downgrading to checksums.
+
+By default, provenance is also pinned to
+`OWNER/REPO/.github/workflows/release-build.yaml`, matching gitrail. Use
+`--workflow PATH` for a differently named release workflow. `--workflow=`
+omits only the workflow constraint; repository, source commit, and signer
+commit constraints remain enabled.
 
 Generated installers include a fixed excerpt based on `client9/shlib`
 v2026.08.30 (`3593994`). It selects the command, logging, platform, archive,

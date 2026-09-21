@@ -97,6 +97,9 @@ func TestGeneratedInstallerFormats(t *testing.T) {
 			if result.err != nil {
 				t.Fatalf("installer failed: %v\n%s", result.err, result.output)
 			}
+			if !strings.Contains(result.output, "build provenance verification unavailable; falling back to SHA-256") {
+				t.Fatalf("old gh did not trigger checksum fallback:\n%s", result.output)
+			}
 			got, err := os.ReadFile(filepath.Join(bindir, executableName))
 			if err != nil {
 				t.Fatal(err)
@@ -113,6 +116,72 @@ func TestGeneratedInstallerFormats(t *testing.T) {
 				t.Fatalf("curl log = %s", logged)
 			}
 		})
+	}
+}
+
+func TestGeneratedInstallerFallsBackWithoutGH(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("generated installers target POSIX sh environments")
+	}
+	const version = "v1.2.3"
+	assetName := "repo_" + version + "_linux_amd64"
+	artifact := filepath.Join(t.TempDir(), assetName)
+	writeFile(t, artifact, "binary", 0o755)
+	env, curlLog := installerEnvironment(t, artifact, assetName, version)
+	fakeBin := envValue(env, "FAKE_BIN")
+	if err := os.Remove(filepath.Join(fakeBin, "gh")); err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range []string{
+		"awk", "cat", "cp", "cut", "find", "install", "mkdir", "mktemp",
+		"mv", "rm", "sed", "tr", "wc",
+	} {
+		target, err := exec.LookPath(command)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(target, filepath.Join(fakeBin, command)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hashCommand := ""
+	for _, command := range []string{"sha256sum", "shasum", "openssl"} {
+		target, err := exec.LookPath(command)
+		if err != nil {
+			continue
+		}
+		if err := os.Symlink(target, filepath.Join(fakeBin, command)); err != nil {
+			t.Fatal(err)
+		}
+		hashCommand = command
+		break
+	}
+	if hashCommand == "" {
+		t.Fatal("no supported SHA-256 command found")
+	}
+	for i, value := range env {
+		if strings.HasPrefix(value, "PATH=") {
+			env[i] = "PATH=" + fakeBin
+		}
+	}
+	result := runGeneratedInstaller(t, config{
+		repository:      "owner/repo",
+		workflow:        "release-build.yaml",
+		checksumPattern: "SHA256SUMS",
+		verification:    "attestation-or-checksum",
+	}, env, "-b", filepath.Join(t.TempDir(), "bin"), version)
+	if result.err != nil {
+		t.Fatalf("installer failed: %v\n%s", result.err, result.output)
+	}
+	if !strings.Contains(result.output, "build provenance verification unavailable; falling back to SHA-256") {
+		t.Fatalf("missing gh did not trigger checksum fallback:\n%s", result.output)
+	}
+	logged, err := os.ReadFile(curlLog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(logged), "/SHA256SUMS") {
+		t.Fatalf("checksum was not downloaded:\n%s", logged)
 	}
 }
 

@@ -43,7 +43,7 @@ func runGenerator(args []string, stdout, stderr io.Writer) error {
 	name := flags.String("name", "", "release package name (defaults to repository name)")
 	var binaries stringListFlag
 	flags.Var(&binaries, "binary", "binary to install (repeatable; defaults to name)")
-	workflow := flags.String("workflow", "release-build.yaml", "release workflow path for attestation verification")
+	workflow := flags.String("workflow", "release-build.yaml", "release workflow path for attestation verification (empty disables workflow pinning)")
 	assetPattern := flags.String("asset-pattern", "", "asset name pattern using {name}, {version}, {os}, and {arch}")
 	checksumPattern := flags.String("checksum-pattern", "SHA256SUMS", "checksum asset name pattern")
 	verification := flags.String("verification", "attestation-or-checksum", "verification policy: attestation, attestation-or-checksum, checksum, or none")

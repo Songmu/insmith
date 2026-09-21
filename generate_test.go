@@ -148,6 +148,32 @@ func TestRunGenerate(t *testing.T) {
 	}
 }
 
+func TestRunVerificationDefaults(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := Run(context.Background(), []string{"owner/repo"}, &stdout, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"WORKFLOW='owner/repo/.github/workflows/release-build.yaml'",
+		"CHECKSUM_PATTERN='SHA256SUMS'",
+		"VERIFICATION='attestation-or-checksum'",
+	} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Errorf("default output does not contain %q", want)
+		}
+	}
+}
+
+func TestRunEmptyWorkflowDisablesPinning(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := Run(context.Background(), []string{"--workflow=", "owner/repo"}, &stdout, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout.String(), "WORKFLOW=''") {
+		t.Errorf("empty workflow output = %q", stdout.String())
+	}
+}
+
 func TestRunRequiresFlagsBeforeRepository(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	err := Run(context.Background(), []string{"owner/repo", "--verification=none"}, &stdout, &stderr)
