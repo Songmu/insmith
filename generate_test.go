@@ -64,7 +64,7 @@ func TestRunHelp(t *testing.T) {
 }
 
 func TestWorkflowPath(t *testing.T) {
-	for _, workflow := range []string{"release.yaml", ".github/workflows/release.yaml", "owner/repo/.github/workflows/release.yaml"} {
+	for _, workflow := range []string{"release.yaml", ".github/workflows/release.yaml", "owner/repo/.github/workflows/release.yaml", "other/repo/.github/workflows/release.yaml"} {
 		script, err := generate(config{
 			repository:   "owner/repo",
 			workflow:     workflow,
@@ -73,7 +73,11 @@ func TestWorkflowPath(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(script, "WORKFLOW='owner/repo/.github/workflows/release.yaml'") {
+		want := "WORKFLOW='owner/repo/.github/workflows/release.yaml'"
+		if strings.HasPrefix(workflow, "other/") {
+			want = "WORKFLOW='other/repo/.github/workflows/release.yaml'"
+		}
+		if !strings.Contains(script, want) {
 			t.Errorf("workflow %q generated an unqualified path", workflow)
 		}
 	}
