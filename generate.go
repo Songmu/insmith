@@ -125,7 +125,7 @@ validate_tag() {
 need curl
 version=${1:-}
 if [ -z "$version" ]; then
-	version=$(curl --proto '=https' --tlsv1.2 -fsSL "https://api.github.com/repos/$REPOSITORY/releases/latest" |
+	version=$(curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL "https://api.github.com/repos/$REPOSITORY/releases/latest" |
 		sed -n 's/^[[:space:]]*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
 	[ -n "$version" ] || fail "could not determine the latest release"
 fi
@@ -146,7 +146,7 @@ esac
 asset_base=$(printf '%s' "$ASSET_PATTERN" |
 	sed -e "s/{binary}/$BINARY/g" -e "s/{version}/$tag/g" -e "s/{os}/$os/g" -e "s/{arch}/$arch/g")
 release_api="https://api.github.com/repos/$REPOSITORY/releases/tags/$tag"
-release_json=$(curl --proto '=https' --tlsv1.2 -fsSL "$release_api") || fail "could not find release $version"
+release_json=$(curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL "$release_api") || fail "could not find release $version"
 asset_urls=$(printf '%s\n' "$release_json" |
 	sed -n 's/^[[:space:]]*"browser_download_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
 
@@ -174,9 +174,9 @@ asset_url=$matches
 asset_name=${asset_url##*/}
 
 tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/insmith.XXXXXX") || fail "could not create temporary directory"
-trap 'rm -rf "$tmpdir"' EXIT HUP INT TERM
+trap 'rm -rf "$tmpdir"' 0 HUP INT TERM
 artifact="$tmpdir/$asset_name"
-curl --proto '=https' --tlsv1.2 -fsSL "$asset_url" -o "$artifact" || fail "could not download $asset_name"
+curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL "$asset_url" -o "$artifact" || fail "could not download $asset_name"
 
 verify_checksum() {
 	checksum_name=$(printf '%s' "$CHECKSUM_PATTERN" |
@@ -185,7 +185,7 @@ verify_checksum() {
 	[ "$(printf '%s\n' "$checksum_url" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 1 ] ||
 		fail "could not find a unique checksum asset named $checksum_name"
 	checksums="$tmpdir/$checksum_name"
-	curl --proto '=https' --tlsv1.2 -fsSL "$checksum_url" -o "$checksums" || fail "could not download checksums"
+	curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL "$checksum_url" -o "$checksums" || fail "could not download checksums"
 	expected=$(awk -v name="$asset_name" '$2 == name || $2 == "*" name { print $1; exit }' "$checksums")
 	[ -n "$expected" ] || fail "checksum for $asset_name is missing"
 	if command -v sha256sum >/dev/null 2>&1; then

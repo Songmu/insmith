@@ -18,7 +18,8 @@ func TestGenerateDefaults(t *testing.T) {
 		"WORKFLOW='Songmu/gitrail/.github/workflows/release-build.yaml'",
 		"git ls-remote",
 		"gh attestation verify",
-		"--proto '=https' --tlsv1.2",
+		"--proto '=https' --proto-redir '=https' --tlsv1.2",
+		"trap 'rm -rf \"$tmpdir\"' 0 HUP INT TERM",
 		"verify_checksum",
 		"INSTALL_DIR=${INSTALL_DIR:-/usr/local/bin}",
 	} {
