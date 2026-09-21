@@ -249,21 +249,59 @@ case "$VERIFICATION" in
 		;;
 esac
 
+check_archive_member() {
+	member=$1
+	case "$member" in
+		/*) fail "archive contains an absolute path: $member" ;;
+	esac
+	case "/$member/" in
+		*/../*) fail "archive contains a path traversal entry: $member" ;;
+	esac
+	case "$member" in
+		../*|*/..) fail "archive contains a path traversal entry: $member" ;;
+	esac
+}
+
 executable=
+extractdir="$tmpdir/extract"
+mkdir -p "$extractdir" || fail "could not create extraction directory"
 case "$asset_name" in
 	*.tar.gz)
 		need tar
-		tar -xzf "$artifact" -C "$tmpdir"
+		tar_listing=$(tar -tvzf "$artifact") || fail "could not list $asset_name contents"
+		while IFS= read -r line; do
+			[ -n "$line" ] || continue
+			case "$line" in
+				l*) fail "archive contains a symlink entry which is not supported" ;;
+			esac
+			member=${line##* }
+			check_archive_member "$member"
+		done <<-EOF
+		$tar_listing
+		EOF
+		tar -xzf "$artifact" -C "$extractdir"
 		;;
 	*.zip)
 		need unzip
-		unzip -q "$artifact" -d "$tmpdir"
+		zip_listing=$(unzip -Z1 "$artifact") || fail "could not list $asset_name contents"
+		while IFS= read -r member; do
+			[ -n "$member" ] || continue
+			check_archive_member "$member"
+			case "$member" in
+				*/) ;;
+				*) unzip -Z "$artifact" "$member" 2>/dev/null | head -n 1 | grep -q '^l' &&
+					fail "archive contains a symlink entry which is not supported" ;;
+			esac
+		done <<-EOF
+		$zip_listing
+		EOF
+		unzip -q "$artifact" -d "$extractdir"
 		;;
 	*)
 		executable=$artifact
 		;;
 esac
-[ -n "$executable" ] || executable=$(find "$tmpdir" -type f -name "$BINARY" -print | head -n 1)
+[ -n "$executable" ] || executable=$(find "$extractdir" -type f -name "$BINARY" -print | head -n 1)
 [ -n "$executable" ] || fail "could not find executable $BINARY in $asset_name"
 mkdir -p "$INSTALL_DIR" || fail "could not create $INSTALL_DIR"
 install -m 0755 "$executable" "$INSTALL_DIR/$BINARY" || fail "could not install $BINARY"
