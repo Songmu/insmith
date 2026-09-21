@@ -448,9 +448,10 @@ End of selected shlib functions based on client9/shlib v2026.08.30
 EOF
 
 REPOSITORY='Songmu/gitrail'
-BINARY='gitrail'
+NAME='gitrail'
+BINARIES='gitrail'
 WORKFLOW='Songmu/gitrail/.github/workflows/release-build.yaml'
-ASSET_PATTERN='{binary}_{version}_{os}_{arch}'
+ASSET_PATTERN='{name}_{version}_{os}_{arch}'
 CHECKSUM_PATTERN='SHA256SUMS'
 VERIFICATION='attestation-or-checksum'
 
@@ -481,9 +482,11 @@ need() {
 }
 
 cleanup() {
-	if [ -n "${install_tmp:-}" ]; then
-		rm -f "$install_tmp"
-		install_tmp=
+	if [ -n "${install_manifest:-}" ] && [ -f "$install_manifest" ]; then
+		tab=$(printf '\t')
+		while IFS="$tab" read -r install_tmp install_destination; do
+			[ -z "$install_tmp" ] || rm -f "$install_tmp"
+		done < "$install_manifest"
 	fi
 	if [ -n "${tmpdir:-}" ]; then
 		rm -rf "$tmpdir"
@@ -514,7 +517,7 @@ line_count() {
 
 verify_checksum() {
 	checksum_name=$(printf '%s' "$CHECKSUM_PATTERN" |
-		sed -e "s/{version}/$TAG/g" -e "s/{binary}/$BINARY/g" -e "s/{os}/$OS/g" -e "s/{arch}/$ARCH/g")
+		sed -e "s/{version}/$TAG/g" -e "s/{name}/$NAME/g" -e "s/{os}/$OS/g" -e "s/{arch}/$ARCH/g")
 	checksum_url="$GITHUB_DOWNLOAD/$TAG/$checksum_name"
 	checksums="$tmpdir/$checksum_name"
 	http_download "$checksums" "$checksum_url" || fail "could not download checksums"
@@ -652,7 +655,7 @@ check_zip_types() {
 
 download_artifact() {
 	asset_base=$(printf '%s' "$ASSET_PATTERN" |
-		sed -e "s/{binary}/$BINARY/g" -e "s/{version}/$TAG/g" -e "s/{os}/$OS/g" -e "s/{arch}/$ARCH/g")
+		sed -e "s/{name}/$NAME/g" -e "s/{version}/$TAG/g" -e "s/{os}/$OS/g" -e "s/{arch}/$ARCH/g")
 	found=0
 	for extension in .tar.gz .zip .exe ''; do
 		if [ "$extension" = ".exe" ] && [ "$OS" != "windows" ]; then
@@ -674,7 +677,7 @@ download_artifact() {
 }
 
 extract_artifact() {
-	executable=
+	raw_artifact=false
 	extractdir="$tmpdir/extract"
 	mkdir -p "$extractdir" || fail "could not create extraction directory"
 	case "$asset_name" in
@@ -706,27 +709,56 @@ extract_artifact() {
 			unzip -q "$artifact" -d "$extractdir" || fail "could not extract $asset_name"
 			;;
 		*)
-			executable=$artifact
+			raw_artifact=true
 			;;
 	esac
-	if [ -z "$executable" ]; then
-		executables=$(find "$extractdir" -type f -name "$EXECUTABLE_NAME" -print)
-		[ "$(printf '%s\n' "$executables" | line_count)" -eq 1 ] ||
-			fail "archive must contain exactly one executable named $EXECUTABLE_NAME"
-		executable=$executables
+}
+
+platform_binary_name() {
+	binary=$1
+	if [ "$OS" = "windows" ]; then
+		case "$binary" in
+			*.exe) printf '%s\n' "$binary" ;;
+			*) printf '%s.exe\n' "$binary" ;;
+		esac
+	else
+		printf '%s\n' "$binary"
 	fi
 }
 
-install_artifact() {
+prepare_binaries() {
 	need install
 	need mv
+	set -- $BINARIES
+	if [ "$raw_artifact" = "true" ] && [ "$#" -ne 1 ]; then
+		fail "raw artifacts can install exactly one binary"
+	fi
 	install -d "$BINDIR" || fail "could not create $BINDIR"
-	install_tmp=$(mktemp "${BINDIR%/}/.${BINARY}.XXXXXX") ||
-		fail "could not create temporary file in $BINDIR"
-	install -m 0755 "$executable" "$install_tmp" || fail "could not prepare $EXECUTABLE_NAME"
-	mv -f "$install_tmp" "$BINDIR/$EXECUTABLE_NAME" || fail "could not install $EXECUTABLE_NAME"
-	install_tmp=
-	printf 'Installed %s to %s\n' "$EXECUTABLE_NAME" "$BINDIR/$EXECUTABLE_NAME"
+	for binary do
+		executable_name=$(platform_binary_name "$binary")
+		if [ "$raw_artifact" = "true" ]; then
+			executable=$artifact
+		else
+			executables=$(find "$extractdir" -type f -name "$executable_name" -print)
+			[ "$(printf '%s\n' "$executables" | line_count)" -eq 1 ] ||
+				fail "archive must contain exactly one executable named $executable_name"
+			executable=$executables
+		fi
+		install_tmp=$(mktemp "${BINDIR%/}/.${executable_name}.XXXXXX") ||
+			fail "could not create temporary file in $BINDIR"
+		install -m 0755 "$executable" "$install_tmp" ||
+			fail "could not prepare $executable_name"
+		printf '%s\t%s\n' "$install_tmp" "$BINDIR/$executable_name" >> "$install_manifest"
+	done
+}
+
+install_binaries() {
+	tab=$(printf '\t')
+	while IFS="$tab" read -r install_tmp install_destination; do
+		mv -f "$install_tmp" "$install_destination" ||
+			fail "could not install ${install_destination##*/}"
+		printf 'Installed %s to %s\n' "${install_destination##*/}" "$install_destination"
+	done < "$install_manifest"
 }
 
 main() {
@@ -743,15 +775,12 @@ main() {
 		linux/amd64|linux/arm64|darwin/amd64|darwin/arm64|windows/amd64|windows/arm64) ;;
 		*) fail "unsupported platform: $OS/$ARCH" ;;
 	esac
-	EXECUTABLE_NAME=$BINARY
-	if [ "$OS" = "windows" ]; then
-		EXECUTABLE_NAME="${BINARY}.exe"
-	fi
 	GITHUB_DOWNLOAD="https://github.com/$REPOSITORY/releases/download"
 
 	tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/insmith.XXXXXX") ||
 		fail "could not create temporary directory"
-	install_tmp=
+	install_manifest="$tmpdir/install-manifest"
+	: > "$install_manifest"
 	trap cleanup 0
 	trap 'exit 1' HUP INT TERM
 
@@ -759,7 +788,8 @@ main() {
 	download_artifact
 	verify_artifact
 	extract_artifact
-	install_artifact
+	prepare_binaries
+	install_binaries
 
 	cleanup
 	trap - 0 HUP INT TERM

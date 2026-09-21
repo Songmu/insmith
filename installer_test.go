@@ -191,6 +191,120 @@ func TestGeneratedInstallerDebugOptions(t *testing.T) {
 	}
 }
 
+func TestGeneratedInstallerMultipleBinaries(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("generated installers target POSIX sh environments")
+	}
+	tests := []struct {
+		name       string
+		unameOS    string
+		normalized string
+		arch       string
+		extension  string
+	}{
+		{name: "linux tar", unameOS: "Linux", normalized: "linux", arch: "x86_64", extension: ".tar.gz"},
+		{name: "windows zip", unameOS: "MINGW64_NT-10.0", normalized: "windows", arch: "arm64", extension: ".zip"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			const version = "v1.2.3"
+			assetName := "tools_" + version + "_" + tt.normalized + "_"
+			if tt.arch == "x86_64" {
+				assetName += "amd64"
+			} else {
+				assetName += "arm64"
+			}
+			assetName += tt.extension
+			suffix := ""
+			if tt.normalized == "windows" {
+				suffix = ".exe"
+			}
+			entries := []archiveEntry{
+				{name: "tools_" + version + "/foo" + suffix, body: "foo"},
+				{name: "tools_" + version + "/bin/bar" + suffix, body: "bar"},
+			}
+			artifact := filepath.Join(t.TempDir(), assetName)
+			if tt.extension == ".zip" {
+				writeZip(t, artifact, entries)
+			} else {
+				writeTarGz(t, artifact, entries)
+			}
+			env, _ := installerEnvironment(t, artifact, assetName, version)
+			env = append(env, "FAKE_UNAME_S="+tt.unameOS, "FAKE_UNAME_M="+tt.arch)
+			bindir := filepath.Join(t.TempDir(), "bin")
+			result := runGeneratedInstaller(t, config{
+				repository:      "owner/repo",
+				name:            "tools",
+				binaries:        []string{"foo", "bar"},
+				checksumPattern: "SHA256SUMS",
+				verification:    "checksum",
+			}, env, "-b", bindir, version)
+			if result.err != nil {
+				t.Fatalf("installer failed: %v\n%s", result.err, result.output)
+			}
+			for binary, want := range map[string]string{"foo" + suffix: "foo", "bar" + suffix: "bar"} {
+				got, err := os.ReadFile(filepath.Join(bindir, binary))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(got) != want {
+					t.Errorf("%s body = %q, want %q", binary, got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestGeneratedInstallerMultipleBinaryFailures(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("generated installers target POSIX sh environments")
+	}
+	const version = "v1.2.3"
+	t.Run("missing binary leaves destinations untouched", func(t *testing.T) {
+		assetName := "tools_" + version + "_linux_amd64.tar.gz"
+		artifact := filepath.Join(t.TempDir(), assetName)
+		writeTarGz(t, artifact, []archiveEntry{{name: "tools/foo", body: "foo"}})
+		env, _ := installerEnvironment(t, artifact, assetName, version)
+		bindir := filepath.Join(t.TempDir(), "bin")
+		if err := os.MkdirAll(bindir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		writeFile(t, filepath.Join(bindir, "foo"), "existing", 0o755)
+		result := runGeneratedInstaller(t, config{
+			repository:   "owner/repo",
+			name:         "tools",
+			binaries:     []string{"foo", "bar"},
+			verification: "none",
+		}, env, "-b", bindir, version)
+		if result.err == nil || !strings.Contains(result.output, "exactly one executable named bar") {
+			t.Fatalf("result = %v\n%s", result.err, result.output)
+		}
+		got, err := os.ReadFile(filepath.Join(bindir, "foo"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != "existing" {
+			t.Fatalf("foo changed before all binaries were prepared: %q", got)
+		}
+	})
+
+	t.Run("raw artifact rejects multiple binaries", func(t *testing.T) {
+		assetName := "tools_" + version + "_linux_amd64"
+		artifact := filepath.Join(t.TempDir(), assetName)
+		writeFile(t, artifact, "raw", 0o755)
+		env, _ := installerEnvironment(t, artifact, assetName, version)
+		result := runGeneratedInstaller(t, config{
+			repository:   "owner/repo",
+			name:         "tools",
+			binaries:     []string{"foo", "bar"},
+			verification: "none",
+		}, env, "-b", filepath.Join(t.TempDir(), "bin"), version)
+		if result.err == nil || !strings.Contains(result.output, "raw artifacts can install exactly one binary") {
+			t.Fatalf("result = %v\n%s", result.err, result.output)
+		}
+	})
+}
+
 func TestGeneratedInstallerDoesNotDowngradeFailures(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("generated installers target POSIX sh on Linux and macOS")

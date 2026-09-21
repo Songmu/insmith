@@ -24,9 +24,19 @@ go run ./cmd/insmith --workflow release-build.yaml Songmu/gitrail > install.sh
 chmod +x install.sh
 ```
 
+For a release package containing multiple executables:
+
+```sh
+go run ./cmd/insmith \
+  --name mytools \
+  --binary foo \
+  --binary bar \
+  owner/repo > install.sh
+```
+
 Generated installers support Linux, macOS, and Windows on amd64 and arm64.
 Windows installation runs under a POSIX-compatible shell such as Git Bash,
-MSYS2, or Cygwin. Installers select `binary_version_os_arch.tar.gz`, `.zip`,
+MSYS2, or Cygwin. Installers select `name_version_os_arch.tar.gz`, `.zip`,
 `.exe`, or a raw binary from direct GitHub Release download URLs, and accept:
 
 ```sh
@@ -44,15 +54,21 @@ debug logging and `-x` for the shell's command execution trace.
 ## Options
 
 ```text
---binary NAME
+--name NAME
+--binary NAME  # repeatable; defaults to --name
 --workflow PATH
 --asset-pattern PATTERN
 --checksum-pattern PATTERN  # default: SHA256SUMS
 --verification attestation|attestation-or-checksum|checksum|none
 ```
 
-Asset patterns may use `{binary}`, `{version}`, `{os}`, and `{arch}`. The
-default verification mode is `attestation-or-checksum`: an unavailable
+The package name defaults to the repository name and is available to asset
+patterns as `{name}`. Each `--binary` identifies an executable inside the
+selected archive; when omitted, the package name is installed as a single
+binary. Asset and checksum patterns may use `{name}`, `{version}`, `{os}`, and
+`{arch}`. A raw, unarchived release asset can install only one binary.
+
+The default verification mode is `attestation-or-checksum`: an unavailable
 attestation capability falls back to SHA-256 verification, while a failed
 attestation or an unresolved release tag aborts installation without
 downgrading to checksums.

@@ -15,8 +15,9 @@ func TestGenerateDefaults(t *testing.T) {
 	}
 	for _, want := range []string{
 		"REPOSITORY='Songmu/gitrail'",
-		"BINARY='gitrail'",
-		"ASSET_PATTERN='{binary}_{version}_{os}_{arch}'",
+		"NAME='gitrail'",
+		"BINARIES='gitrail'",
+		"ASSET_PATTERN='{name}_{version}_{os}_{arch}'",
 		"WORKFLOW='Songmu/gitrail/.github/workflows/release-build.yaml'",
 		`main "$@"`,
 		`BINDIR=${BINDIR:-./bin}`,
@@ -34,7 +35,7 @@ func TestGenerateDefaults(t *testing.T) {
 		`TAG=$(github_release "$REPOSITORY" "$requested_tag")`,
 		`GITHUB_DOWNLOAD="https://github.com/$REPOSITORY/releases/download"`,
 		`windows/amd64|windows/arm64`,
-		`EXECUTABLE_NAME="${BINARY}.exe"`,
+		`platform_binary_name`,
 		"trap cleanup 0",
 		"trap 'exit 1' HUP INT TERM",
 		`*[!A-Za-z0-9._+-]* | "")`,
@@ -80,15 +81,23 @@ func TestGenerateValidation(t *testing.T) {
 	if err == nil {
 		t.Error("generate accepted an invalid verification policy")
 	}
-	_, err = generate(config{repository: "owner/repo", binary: "bad/name", verification: "none"})
+	_, err = generate(config{repository: "owner/repo", name: "bad/name", verification: "none"})
+	if err == nil {
+		t.Error("generate accepted an unsafe name")
+	}
+	_, err = generate(config{repository: "owner/repo", binaries: []string{"good", "bad/name"}, verification: "none"})
 	if err == nil {
 		t.Error("generate accepted an unsafe binary name")
+	}
+	_, err = generate(config{repository: "owner/repo", binaries: []string{"duplicate", "duplicate"}, verification: "none"})
+	if err == nil {
+		t.Error("generate accepted duplicate binary names")
 	}
 	_, err = generate(config{repository: "owner/repo", checksumPattern: "bad/path", verification: "checksum"})
 	if err == nil {
 		t.Error("generate accepted an unsafe checksum pattern")
 	}
-	for _, pattern := range []string{"{unknown}", "{binary", "binary}"} {
+	for _, pattern := range []string{"{unknown}", "{binary}", "{name", "name}"} {
 		if _, err := generate(config{repository: "owner/repo", assetPattern: pattern, verification: "none"}); err == nil {
 			t.Errorf("generate accepted an invalid asset pattern %q", pattern)
 		}
@@ -98,9 +107,12 @@ func TestGenerateValidation(t *testing.T) {
 			t.Errorf("generate accepted an invalid repository %q", repository)
 		}
 	}
-	for _, binary := range []string{".", ".."} {
-		if _, err := generate(config{repository: "owner/repo", binary: binary, verification: "none"}); err == nil {
-			t.Errorf("generate accepted an unsafe binary name %q", binary)
+	for _, name := range []string{".", ".."} {
+		if _, err := generate(config{repository: "owner/repo", name: name, verification: "none"}); err == nil {
+			t.Errorf("generate accepted an unsafe name %q", name)
+		}
+		if _, err := generate(config{repository: "owner/repo", binaries: []string{name}, verification: "none"}); err == nil {
+			t.Errorf("generate accepted an unsafe binary name %q", name)
 		}
 	}
 }
@@ -122,12 +134,13 @@ func TestRunHelp(t *testing.T) {
 }
 
 func TestRunGenerate(t *testing.T) {
-	args := []string{"--verification=none", "owner/repo"}
+	args := []string{"--verification=none", "--name=tools", "--binary=foo", "--binary=bar", "owner/repo"}
 	var stdout, stderr bytes.Buffer
 	if err := Run(context.Background(), args, &stdout, &stderr); err != nil {
 		t.Fatalf("Run(%q): %v", args, err)
 	}
-	if !strings.Contains(stdout.String(), "REPOSITORY='owner/repo'") {
+	if !strings.Contains(stdout.String(), "NAME='tools'") ||
+		!strings.Contains(stdout.String(), "BINARIES='foo bar'") {
 		t.Errorf("Run(%q) output = %q", args, stdout.String())
 	}
 }

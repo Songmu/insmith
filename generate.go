@@ -13,11 +13,23 @@ import (
 
 type config struct {
 	repository      string
-	binary          string
+	name            string
+	binaries        []string
 	workflow        string
 	assetPattern    string
 	checksumPattern string
 	verification    string
+}
+
+type stringListFlag []string
+
+func (f *stringListFlag) String() string {
+	return strings.Join(*f, ",")
+}
+
+func (f *stringListFlag) Set(value string) error {
+	*f = append(*f, value)
+	return nil
 }
 
 func runGenerator(args []string, stdout, stderr io.Writer) error {
@@ -28,9 +40,11 @@ func runGenerator(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprintln(stderr)
 		flags.PrintDefaults()
 	}
-	binary := flags.String("binary", "", "binary name (defaults to repository name)")
+	name := flags.String("name", "", "release package name (defaults to repository name)")
+	var binaries stringListFlag
+	flags.Var(&binaries, "binary", "binary to install (repeatable; defaults to name)")
 	workflow := flags.String("workflow", "release-build.yaml", "release workflow path for attestation verification")
-	assetPattern := flags.String("asset-pattern", "", "asset name pattern using {binary}, {version}, {os}, and {arch}")
+	assetPattern := flags.String("asset-pattern", "", "asset name pattern using {name}, {version}, {os}, and {arch}")
 	checksumPattern := flags.String("checksum-pattern", "SHA256SUMS", "checksum asset name pattern")
 	verification := flags.String("verification", "attestation-or-checksum", "verification policy: attestation, attestation-or-checksum, checksum, or none")
 	showVersion := flags.Bool("version", false, "display version")
@@ -50,7 +64,8 @@ func runGenerator(args []string, stdout, stderr io.Writer) error {
 
 	script, err := generate(config{
 		repository:      flags.Arg(0),
-		binary:          *binary,
+		name:            *name,
+		binaries:        binaries,
 		workflow:        *workflow,
 		assetPattern:    *assetPattern,
 		checksumPattern: *checksumPattern,
@@ -69,14 +84,27 @@ func generate(c config) (string, error) {
 		parts[0] == "." || parts[0] == ".." || parts[1] == "." || parts[1] == ".." {
 		return "", fmt.Errorf("repository must be in OWNER/REPO form")
 	}
-	if c.binary == "" {
-		c.binary = parts[1]
+	if c.name == "" {
+		c.name = parts[1]
 	}
-	if !safeFilename(c.binary) || c.binary == "." || c.binary == ".." {
-		return "", fmt.Errorf("binary must contain only letters, digits, dots, underscores, and hyphens")
+	if !safeFilename(c.name) || c.name == "." || c.name == ".." {
+		return "", fmt.Errorf("name must contain only letters, digits, dots, underscores, and hyphens")
+	}
+	if len(c.binaries) == 0 {
+		c.binaries = []string{c.name}
+	}
+	seenBinaries := make(map[string]struct{}, len(c.binaries))
+	for _, binary := range c.binaries {
+		if !safeFilename(binary) || binary == "." || binary == ".." {
+			return "", fmt.Errorf("binary %q must contain only letters, digits, dots, underscores, and hyphens", binary)
+		}
+		if _, ok := seenBinaries[binary]; ok {
+			return "", fmt.Errorf("binary %q is specified more than once", binary)
+		}
+		seenBinaries[binary] = struct{}{}
 	}
 	if c.assetPattern == "" {
-		c.assetPattern = "{binary}_{version}_{os}_{arch}"
+		c.assetPattern = "{name}_{version}_{os}_{arch}"
 	}
 	if !safePattern(c.assetPattern) {
 		return "", fmt.Errorf("asset pattern contains unsupported characters")
@@ -103,14 +131,16 @@ func generate(c config) (string, error) {
 	var output bytes.Buffer
 	if err := scriptTemplate.Execute(&output, struct {
 		Repository      string
-		Binary          string
+		Name            string
+		Binaries        string
 		Workflow        string
 		AssetPattern    string
 		ChecksumPattern string
 		Verification    string
 	}{
 		shellQuote(c.repository),
-		shellQuote(c.binary),
+		shellQuote(c.name),
+		shellQuote(strings.Join(c.binaries, " ")),
 		shellQuote(c.workflow),
 		shellQuote(c.assetPattern),
 		shellQuote(c.checksumPattern),
@@ -133,7 +163,7 @@ func safePattern(name string) bool {
 	if !safeName(name, true) {
 		return false
 	}
-	for _, placeholder := range []string{"{binary}", "{version}", "{os}", "{arch}"} {
+	for _, placeholder := range []string{"{name}", "{version}", "{os}", "{arch}"} {
 		name = strings.ReplaceAll(name, placeholder, "")
 	}
 	return !strings.ContainsAny(name, "{}")
