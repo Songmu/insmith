@@ -10,10 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      actions: write
       contents: write
       pull-requests: write
-      issues: write
+      issues: read
+    outputs:
+      tag: ${{ steps.tagpr.outputs.tag }}
     steps:
     - name: checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -28,9 +29,17 @@ jobs:
       uses: Songmu/tagpr@7ebae2dcc300132baa7cc9dd108c8923b07fc366 # v1.20.3
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dispatch-release:
+    needs: tagpr
+    if: needs.tagpr.outputs.tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
     - name: dispatch release
-      if: steps.tagpr.outputs.tag != ''
       env:
         GH_TOKEN: ${{ github.token }}
-        TAG: ${{ steps.tagpr.outputs.tag }}
+        TAG: ${{ needs.tagpr.outputs.tag }}
       run: gh workflow run release.yaml --ref "$TAG"
