@@ -231,8 +231,12 @@ check_tar_types() {
 }
 
 check_zip_types() {
+	listing=$1
+	expected=$2
+	checked=0
 	while IFS= read -r line; do
 		case "$line" in
+			-?????????*|d?????????*) checked=$((checked + 1)) ;;
 			l?????????*) fail "archive contains a symlink entry which is not supported" ;;
 			h?????????*) fail "archive contains a hard link entry which is not supported" ;;
 			b?????????*|c?????????*|p?????????*|s?????????*)
@@ -240,8 +244,9 @@ check_zip_types() {
 				;;
 		esac
 	done <<-EOF
-	$1
+	$listing
 	EOF
+	[ "$checked" -eq "$expected" ] || fail "could not validate all zip entry types"
 }
 
 extract_artifact() {
@@ -272,7 +277,8 @@ extract_artifact() {
 			$zip_names
 			EOF
 			zip_types=$(unzip -Z -s "$artifact") || fail "could not list $asset_name contents"
-			check_zip_types "$zip_types"
+			zip_count=$(printf '%s\n' "$zip_names" | line_count)
+			check_zip_types "$zip_types" "$zip_count"
 			unzip -q "$artifact" -d "$extractdir" || fail "could not extract $asset_name"
 			;;
 		*)

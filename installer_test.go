@@ -283,17 +283,20 @@ func TestGeneratedInstallerRejectsUnsafeArchives(t *testing.T) {
 		t.Skip("generated installers target POSIX sh on Linux and macOS")
 	}
 	tests := []struct {
-		name    string
-		entries []archiveEntry
-		want    string
+		name      string
+		extension string
+		entries   []archiveEntry
+		want      string
 	}{
 		{
-			name:    "path traversal",
-			entries: []archiveEntry{{name: "../repo", body: "binary"}},
-			want:    "path traversal",
+			name:      "tar path traversal",
+			extension: ".tar.gz",
+			entries:   []archiveEntry{{name: "../repo", body: "binary"}},
+			want:      "path traversal",
 		},
 		{
-			name: "symlink",
+			name:      "tar symlink",
+			extension: ".tar.gz",
 			entries: []archiveEntry{{
 				name:     "repo",
 				typeflag: tar.TypeSymlink,
@@ -302,20 +305,41 @@ func TestGeneratedInstallerRejectsUnsafeArchives(t *testing.T) {
 			want: "symlink",
 		},
 		{
-			name: "duplicate binary",
+			name:      "tar duplicate binary",
+			extension: ".tar.gz",
 			entries: []archiveEntry{
 				{name: "one/repo", body: "one"},
 				{name: "two/repo", body: "two"},
 			},
 			want: "exactly one executable",
 		},
+		{
+			name:      "zip path traversal",
+			extension: ".zip",
+			entries:   []archiveEntry{{name: "../repo", body: "binary"}},
+			want:      "path traversal",
+		},
+		{
+			name:      "zip symlink",
+			extension: ".zip",
+			entries: []archiveEntry{{
+				name:     "repo",
+				typeflag: tar.TypeSymlink,
+				linkname: "/tmp/target",
+			}},
+			want: "symlink",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			const version = "v1.2.3"
-			assetName := "repo_" + version + "_linux_amd64.tar.gz"
+			assetName := "repo_" + version + "_linux_amd64" + tt.extension
 			artifact := filepath.Join(t.TempDir(), assetName)
-			writeTarGz(t, artifact, tt.entries)
+			if tt.extension == ".zip" {
+				writeZip(t, artifact, tt.entries)
+			} else {
+				writeTarGz(t, artifact, tt.entries)
+			}
 			env, _ := installerEnvironment(t, artifact, assetName, version)
 			result := runGeneratedInstaller(t, config{
 				repository:   "owner/repo",
@@ -436,6 +460,7 @@ esac
 	path := fakeBin + ":/usr/bin:/bin:/usr/sbin:/sbin"
 	env := []string{
 		"PATH=" + path,
+		"BINDIR=",
 		"FAKE_BIN=" + fakeBin,
 		"FAKE_UNAME_S=Linux",
 		"FAKE_UNAME_M=x86_64",
@@ -516,12 +541,20 @@ func writeZip(t *testing.T, path string, entries []archiveEntry) {
 	writer := zip.NewWriter(file)
 	for _, entry := range entries {
 		header := &zip.FileHeader{Name: entry.name, Method: zip.Deflate}
-		header.SetMode(0o755)
+		if entry.typeflag == tar.TypeSymlink {
+			header.SetMode(os.ModeSymlink | 0o777)
+		} else {
+			header.SetMode(0o755)
+		}
 		entryWriter, err := writer.CreateHeader(header)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := io.WriteString(entryWriter, entry.body); err != nil {
+		body := entry.body
+		if entry.typeflag == tar.TypeSymlink {
+			body = entry.linkname
+		}
+		if _, err := io.WriteString(entryWriter, body); err != nil {
 			t.Fatal(err)
 		}
 	}
