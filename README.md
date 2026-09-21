@@ -53,13 +53,18 @@ attestation capability falls back to SHA-256 verification, while a failed
 attestation or an unresolved release tag aborts installation without
 downgrading to checksums.
 
-Generated installers include a fixed snapshot of the portable helper
-functions derived from `client9/shlib`. They require POSIX `sh` and standard
-Unix tools, and can download with `curl`, `wget`, `fetch`, `ftp`, Python 3, or
-Node.js. They require `tar` or `unzip` for the selected archive format. `git`
-and a safe GitHub CLI version with attestation digest support are optional in
-the default mode; when unavailable, the installer verifies the release
-checksum.
+Generated installers include a fixed excerpt based on `client9/shlib`
+v2026.08.30 (`3593994`). It selects the command, logging, platform, archive,
+download, GitHub Release, and SHA-256 helpers needed by insmith, while omitting
+unselected functions and upstream explanatory comments. The only behavioral
+divergence is in `http_download_curl`, where insmith adds `--proto '=https'`
+and `--tlsv1.2` to reject plaintext or downgraded transports.
+
+Generated installers require POSIX `sh` and standard Unix tools, and can
+download with `curl`, `wget`, `fetch`, `ftp`, Python 3, or Node.js. They
+require `tar` or `unzip` for the selected archive format. `git` and a safe
+GitHub CLI version with attestation digest support are optional in the default
+mode; when unavailable, the installer verifies the release checksum.
 
 ## Synopsis
 

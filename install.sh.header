@@ -1,12 +1,17 @@
 cat /dev/null <<EOF
 ------------------------------------------------------------------------
-shlib 2026.08.30 - portable shell functions for install scripts
+Selected functions based on client9/shlib v2026.08.30 (commit 3593994).
+This excerpt includes the command, logging, platform, archive, download,
+GitHub Release, and SHA-256 helpers used by generated installers.
+Unselected functions and upstream explanatory comments are omitted.
 
 https://github.com/client9/shlib
 Public domain - http://unlicense.org
 https://github.com/client9/shlib/blob/master/LICENSE.md
 
-but credit (and pull requests) appreciated.
+The only behavioral divergence from v2026.08.30 is in http_download_curl:
+it adds curl --proto '=https' and --tlsv1.2 to reject plaintext or downgraded
+transports.
 ------------------------------------------------------------------------
 EOF
 is_command() {
@@ -178,8 +183,8 @@ http_download_curl() {
   _shlib_local_file=$1
   _shlib_source_url=$2
   _shlib_header=${3-}
-  # --proto '=https' --tlsv1.2 refuse plaintext/downgraded transports so a
-  # network attacker cannot redirect a download to a weaker channel.
+  # insmith divergence from shlib 2026.08.30: these options refuse
+  # plaintext/downgraded transports.
   if [ -z "$_shlib_header" ]; then
     curl --proto '=https' --tlsv1.2 -fsSL -o "$_shlib_local_file" "$_shlib_source_url"
   else
@@ -434,6 +439,6 @@ hash_sha256_verify() {
 }
 cat /dev/null <<EOF
 ------------------------------------------------------------------------
-End of shlib 2026.08.30 functions
+End of selected shlib functions based on client9/shlib v2026.08.30
 ------------------------------------------------------------------------
 EOF
