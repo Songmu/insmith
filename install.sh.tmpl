@@ -20,7 +20,9 @@ usage() {
 Usage: $0 [-b bindir] [tag]
 
   -b bindir  installation directory (default: BINDIR or ./bin)
+  -d         enable debug logging
   -h         show this help
+  -x         enable shell execution tracing
 EOF
 	exit "$status"
 }
@@ -42,10 +44,12 @@ cleanup() {
 
 parse_args() {
 	BINDIR=${BINDIR:-./bin}
-	while getopts "b:h" arg; do
+	while getopts "b:dhx" arg; do
 		case "$arg" in
 			b) BINDIR=$OPTARG ;;
+			d) log_set_priority 10 ;;
 			h) usage 0 ;;
+			x) set -x ;;
 			*) usage 2 ;;
 		esac
 	done

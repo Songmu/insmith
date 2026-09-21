@@ -160,6 +160,30 @@ exit 0
 	}
 }
 
+func TestGeneratedInstallerDebugOptions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("generated installers target POSIX sh on Linux and macOS")
+	}
+	const version = "v1.2.3"
+	assetName := "repo_" + version + "_linux_amd64"
+	artifact := filepath.Join(t.TempDir(), assetName)
+	writeFile(t, artifact, "binary", 0o755)
+	env, _ := installerEnvironment(t, artifact, assetName, version)
+	result := runGeneratedInstaller(t, config{
+		repository:   "owner/repo",
+		verification: "none",
+	}, env, "-d", "-x", "-b", filepath.Join(t.TempDir(), "bin"), version)
+	if result.err != nil {
+		t.Fatalf("installer failed: %v\n%s", result.err, result.output)
+	}
+	if !strings.Contains(result.output, "owner/repo debug http_download") {
+		t.Errorf("-d did not enable debug logging:\n%s", result.output)
+	}
+	if !strings.Contains(result.output, "+ shift") {
+		t.Errorf("-x did not enable shell tracing:\n%s", result.output)
+	}
+}
+
 func TestGeneratedInstallerDoesNotDowngradeFailures(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("generated installers target POSIX sh on Linux and macOS")

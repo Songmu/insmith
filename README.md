@@ -32,10 +32,13 @@ Release download URLs, and accept:
 ./install.sh -b "$HOME/bin"
 BINDIR="$HOME/bin" ./install.sh
 ./install.sh v1.2.3
+./install.sh -d v1.2.3
+./install.sh -x -b "$HOME/bin" v1.2.3
 ```
 
 The default installation directory is `./bin`. Generator flags must precede
-the single `OWNER/REPO` argument.
+the single `OWNER/REPO` argument. Generated installers accept `-d` for shlib
+debug logging and `-x` for the shell's command execution trace.
 
 ## Options
 
