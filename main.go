@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -27,6 +28,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 	checksumPattern := flags.String("checksum-pattern", "SHA256SUMS", "checksum asset name pattern")
 	verification := flags.String("verification", "attestation-or-checksum", "verification policy: attestation, attestation-or-checksum, checksum, or none")
 	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
 		return err
 	}
 	if flags.NArg() != 1 {

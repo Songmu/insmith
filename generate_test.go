@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 )
@@ -41,5 +42,15 @@ func TestGenerateValidation(t *testing.T) {
 func TestShellQuote(t *testing.T) {
 	if got, want := shellQuote("a'b"), `'a'"'"'b'`; got != want {
 		t.Errorf("shellQuote() = %q, want %q", got, want)
+	}
+}
+
+func TestRunHelp(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := run([]string{"generate", "-h"}, &stdout, &stderr); err != nil {
+		t.Fatalf("run help: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "Usage of insmith generate:") {
+		t.Errorf("help output = %q", stderr.String())
 	}
 }
