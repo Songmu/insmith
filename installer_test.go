@@ -406,6 +406,13 @@ case "$1" in
 	*) exit 1 ;;
 esac
 `)
+	writeCommand(t, fakeBin, "gh", `
+if [ "$1" = "--version" ]; then
+	printf 'gh version 2.92.0 (test)\n'
+	exit 0
+fi
+exit 1
+`)
 	writeCommand(t, fakeBin, "curl", `
 out=
 url=
