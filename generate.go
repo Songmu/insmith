@@ -25,7 +25,7 @@ func generate(c config) (string, error) {
 	if c.binary == "" {
 		c.binary = parts[1]
 	}
-	if !safeFilename(c.binary) {
+	if !safeFilename(c.binary) || c.binary == "." || c.binary == ".." {
 		return "", fmt.Errorf("binary must contain only letters, digits, dots, underscores, and hyphens")
 	}
 	if c.assetPattern == "" {
