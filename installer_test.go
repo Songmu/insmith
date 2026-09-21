@@ -20,6 +20,7 @@ type archiveEntry struct {
 	body     string
 	typeflag byte
 	linkname string
+	fat      bool
 }
 
 func TestGeneratedInstallerFormats(t *testing.T) {
@@ -34,9 +35,10 @@ func TestGeneratedInstallerFormats(t *testing.T) {
 		latest     bool
 		useBindEnv bool
 		defaultBin bool
+		fatZip     bool
 	}{
 		{name: "tar latest with flag", goos: "Linux", arch: "x86_64", extension: ".tar.gz", latest: true},
-		{name: "zip explicit with env", goos: "Darwin", arch: "arm64", extension: ".zip", useBindEnv: true},
+		{name: "zip explicit with env", goos: "Darwin", arch: "arm64", extension: ".zip", useBindEnv: true, fatZip: true},
 		{name: "raw explicit with default", goos: "Linux", arch: "aarch64", defaultBin: true},
 	}
 	for _, tt := range tests {
@@ -55,7 +57,7 @@ func TestGeneratedInstallerFormats(t *testing.T) {
 			case ".tar.gz":
 				writeTarGz(t, artifact, []archiveEntry{{name: "repo_" + version + "/repo", body: wantBody}})
 			case ".zip":
-				writeZip(t, artifact, []archiveEntry{{name: "repo_" + version + "/repo", body: wantBody}})
+				writeZip(t, artifact, []archiveEntry{{name: "repo_" + version + "/repo", body: wantBody, fat: tt.fatZip}})
 			default:
 				writeFile(t, artifact, wantBody, 0o755)
 			}
@@ -543,7 +545,7 @@ func writeZip(t *testing.T, path string, entries []archiveEntry) {
 		header := &zip.FileHeader{Name: entry.name, Method: zip.Deflate}
 		if entry.typeflag == tar.TypeSymlink {
 			header.SetMode(os.ModeSymlink | 0o777)
-		} else {
+		} else if !entry.fat {
 			header.SetMode(0o755)
 		}
 		entryWriter, err := writer.CreateHeader(header)

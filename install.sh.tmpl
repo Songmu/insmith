@@ -233,20 +233,24 @@ check_tar_types() {
 check_zip_types() {
 	listing=$1
 	expected=$2
-	checked=0
-	while IFS= read -r line; do
-		case "$line" in
-			-?????????*|d?????????*) checked=$((checked + 1)) ;;
-			l?????????*) fail "archive contains a symlink entry which is not supported" ;;
-			h?????????*) fail "archive contains a hard link entry which is not supported" ;;
-			b?????????*|c?????????*|p?????????*|s?????????*)
+	attributes=$(printf '%s\n' "$listing" |
+		awk '$2 ~ /^[0-9]+\.[0-9]+$/ { print $1 }')
+	[ "$(printf '%s\n' "$attributes" | line_count)" -eq "$expected" ] ||
+		fail "could not validate all zip entry types"
+	while IFS= read -r attribute; do
+		case "$attribute" in
+			-*) ;;
+			d*) ;;
+			l*) fail "archive contains a symlink entry which is not supported" ;;
+			h*) fail "archive contains a hard link entry which is not supported" ;;
+			b*|c*|p*|s*)
 				fail "archive contains an unsupported entry type"
 				;;
+			*) fail "archive contains an unknown entry type" ;;
 		esac
 	done <<-EOF
-	$listing
+	$attributes
 	EOF
-	[ "$checked" -eq "$expected" ] || fail "could not validate all zip entry types"
 }
 
 extract_artifact() {
