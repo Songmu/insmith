@@ -20,14 +20,8 @@ verify its provenance with GitHub Artifact Attestations or SHA-256 checksums.
 Generate an installer for a conventional GoReleaser-style release:
 
 ```sh
-go run ./cmd/insmith generate Songmu/gitrail > install.sh
-chmod +x install.sh
-```
-
-The command shorthand is also supported:
-
-```sh
 go run ./cmd/insmith Songmu/gitrail > install.sh
+chmod +x install.sh
 ```
 
 Generated installers support Linux and macOS on amd64 and arm64. They select

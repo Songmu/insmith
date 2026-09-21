@@ -72,26 +72,32 @@ func TestShellQuote(t *testing.T) {
 
 func TestRunHelp(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if err := runGenerate([]string{"-h"}, &stdout, &stderr); err != nil {
+	if err := runGenerator([]string{"-h"}, &stdout, &stderr); err != nil {
 		t.Fatalf("run help: %v", err)
 	}
-	if !strings.Contains(stderr.String(), "Usage of insmith generate:") {
+	if !strings.Contains(stderr.String(), "Usage of insmith:") {
 		t.Errorf("help output = %q", stderr.String())
 	}
 }
 
 func TestRunGenerate(t *testing.T) {
-	for _, args := range [][]string{
-		{"generate", "--verification=none", "owner/repo"},
-		{"--verification=none", "owner/repo"},
-	} {
-		var stdout, stderr bytes.Buffer
-		if err := Run(context.Background(), args, &stdout, &stderr); err != nil {
-			t.Fatalf("Run(%q): %v", args, err)
-		}
-		if !strings.Contains(stdout.String(), "REPOSITORY='owner/repo'") {
-			t.Errorf("Run(%q) output = %q", args, stdout.String())
-		}
+	args := []string{"--verification=none", "owner/repo"}
+	var stdout, stderr bytes.Buffer
+	if err := Run(context.Background(), args, &stdout, &stderr); err != nil {
+		t.Fatalf("Run(%q): %v", args, err)
+	}
+	if !strings.Contains(stdout.String(), "REPOSITORY='owner/repo'") {
+		t.Errorf("Run(%q) output = %q", args, stdout.String())
+	}
+}
+
+func TestRunVersion(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := Run(context.Background(), []string{"-version"}, &stdout, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(stdout.String(), "insmith v") {
+		t.Errorf("version output = %q", stdout.String())
 	}
 }
 

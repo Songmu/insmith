@@ -19,19 +19,23 @@ type config struct {
 	verification    string
 }
 
-func runGenerate(args []string, stdout, stderr io.Writer) error {
-	flags := flag.NewFlagSet("insmith generate", flag.ContinueOnError)
+func runGenerator(args []string, stdout, stderr io.Writer) error {
+	flags := flag.NewFlagSet("insmith", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	binary := flags.String("binary", "", "binary name (defaults to repository name)")
 	workflow := flags.String("workflow", "release-build.yaml", "release workflow path for attestation verification")
 	assetPattern := flags.String("asset-pattern", "", "asset name pattern using {binary}, {version}, {os}, and {arch}")
 	checksumPattern := flags.String("checksum-pattern", "SHA256SUMS", "checksum asset name pattern")
 	verification := flags.String("verification", "attestation-or-checksum", "verification policy: attestation, attestation-or-checksum, checksum, or none")
+	showVersion := flags.Bool("version", false, "display version")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
 		return err
+	}
+	if *showVersion {
+		return printVersion(stdout)
 	}
 	if flags.NArg() != 1 {
 		flags.Usage()
