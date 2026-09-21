@@ -20,8 +20,11 @@ func TestGenerateDefaults(t *testing.T) {
 		"gh attestation verify",
 		"gh attestation verify \"$artifact\" --repo \"$REPOSITORY\" --source-digest \"$commit\" --signer-digest \"$commit\" || return 1",
 		"--proto '=https' --proto-redir '=https' --tlsv1.2",
-		"trap 'rm -rf \"$tmpdir\"' 0 HUP INT TERM",
+		"trap 'rm -rf \"$tmpdir\"' 0",
+		"trap 'exit 1' HUP INT TERM",
+		"case \"$1\" in *[!A-Za-z0-9._+-]*) return 1 ;; esac",
 		"tar_names=$(tar -tzf \"$artifact\")",
+		"h*) fail \"archive contains a hard link entry which is not supported\"",
 		"verify_checksum",
 		"INSTALL_DIR=${INSTALL_DIR:-/usr/local/bin}",
 	} {
@@ -48,7 +51,7 @@ func TestGenerateValidation(t *testing.T) {
 	if err == nil {
 		t.Error("generate accepted an unsafe checksum pattern")
 	}
-	for _, repository := range []string{"owner/repo?foo=bar", "owner/repo#fragment", "own?er/repo", "owner/repo/name"} {
+	for _, repository := range []string{"owner/repo?foo=bar", "owner/repo#fragment", "own?er/repo", "owner/repo/name", "./repo", "../repo", "owner/.", "owner/.."} {
 		if _, err := generate(config{repository: repository, verification: "none"}); err == nil {
 			t.Errorf("generate accepted an invalid repository %q", repository)
 		}
