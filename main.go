@@ -35,7 +35,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 	}
 	if flags.NArg() != 1 {
 		flags.Usage()
-		return fmt.Errorf("exactly one OWNER/REPO argument is required")
+		return errors.New("exactly one OWNER/REPO argument is required")
 	}
 
 	script, err := generate(config{
