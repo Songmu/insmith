@@ -30,6 +30,12 @@ func generate(c config) (string, error) {
 	if c.assetPattern == "" {
 		c.assetPattern = "{binary}_{version}_{os}_{arch}"
 	}
+	if !safePattern(c.assetPattern) {
+		return "", fmt.Errorf("asset pattern contains unsupported characters")
+	}
+	if c.checksumPattern != "" && !safePattern(c.checksumPattern) {
+		return "", fmt.Errorf("checksum pattern contains unsupported characters")
+	}
 	if c.workflow != "" && !strings.HasPrefix(c.workflow, c.repository+"/") {
 		c.workflow = strings.TrimPrefix(c.workflow, "/")
 		if !strings.HasPrefix(c.workflow, ".github/workflows/") {
@@ -72,11 +78,19 @@ func shellQuote(s string) string {
 }
 
 func safeFilename(name string) bool {
+	return safeName(name, false)
+}
+
+func safePattern(name string) bool {
+	return safeName(name, true)
+}
+
+func safeName(name string, patterns bool) bool {
 	if name == "" {
 		return false
 	}
 	for _, r := range name {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-') {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-' || patterns && (r == '{' || r == '}')) {
 			return false
 		}
 	}
@@ -105,8 +119,7 @@ need() {
 }
 
 validate_tag() {
-	case "$1" in *[!A-Za-z0-9._-]*) fail "unsupported version: $1" ;; esac
-	printf '%s' "$1"
+	case "$1" in *[!A-Za-z0-9._-]*) return 1 ;; esac
 }
 
 need curl
@@ -116,7 +129,8 @@ if [ -z "$version" ]; then
 		sed -n 's/^[[:space:]]*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
 	[ -n "$version" ] || fail "could not determine the latest release"
 fi
-tag=$(validate_tag "$version")
+validate_tag "$version" || fail "unsupported version: $version"
+tag=$version
 
 case $(uname -s) in
 	Linux) os=linux ;;
@@ -130,7 +144,7 @@ case $(uname -m) in
 esac
 
 asset_base=$(printf '%s' "$ASSET_PATTERN" |
-	sed -e "s/{binary}/$BINARY/g" -e "s/{version}/$version/g" -e "s/{os}/$os/g" -e "s/{arch}/$arch/g")
+	sed -e "s/{binary}/$BINARY/g" -e "s/{version}/$tag/g" -e "s/{os}/$os/g" -e "s/{arch}/$arch/g")
 release_api="https://api.github.com/repos/$REPOSITORY/releases/tags/$tag"
 release_json=$(curl --proto '=https' --tlsv1.2 -fsSL "$release_api") || fail "could not find release $version"
 asset_urls=$(printf '%s\n' "$release_json" |
@@ -165,7 +179,7 @@ curl --proto '=https' --tlsv1.2 -fsSL "$asset_url" -o "$artifact" || fail "could
 
 verify_checksum() {
 	checksum_name=$(printf '%s' "$CHECKSUM_PATTERN" |
-		sed -e "s/{version}/$version/g" -e "s/{binary}/$BINARY/g")
+		sed -e "s/{version}/$tag/g" -e "s/{binary}/$BINARY/g")
 	checksum_url=$(asset_url_for_name "$checksum_name")
 	[ "$(printf '%s\n' "$checksum_url" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 1 ] ||
 		fail "could not find a unique checksum asset named $checksum_name"
@@ -187,7 +201,8 @@ verify_checksum() {
 
 verify_attestation() {
 	command -v gh >/dev/null 2>&1 || return 2
-	gh_version=$(gh --version 2>/dev/null | awk 'NR == 1 { sub(/^gh version /, "", $0); split($0, v, "."); print v[1] * 1000000 + v[2] * 1000 + v[3] }')
+	# GitHub CLI 2.93.0 introduced safe --signer-digest attestation verification.
+	gh_version=$(gh --version 2>/dev/null | awk 'NR == 1 { sub(/^gh version /, "", $0); split($0, v, "."); sub(/[^0-9].*/, "", v[3]); print v[1] * 1000000 + v[2] * 1000 + v[3] }')
 	[ -n "$gh_version" ] && [ "$gh_version" -ge 2093000 ] || return 2
 	gh attestation verify --help >/dev/null 2>&1 || return 2
 	gh attestation verify --help 2>&1 | grep -q -- '--signer-digest' || return 2
@@ -228,6 +243,7 @@ case "$VERIFICATION" in
 		;;
 esac
 
+executable=
 case "$asset_name" in
 	*.tar.gz)
 		need tar
@@ -238,9 +254,10 @@ case "$asset_name" in
 		unzip -q "$artifact" -d "$tmpdir"
 		;;
 	*)
+		executable=$artifact
 		;;
 esac
-executable=$(find "$tmpdir" -type f -name "$BINARY" -print | head -n 1)
+[ -n "$executable" ] || executable=$(find "$tmpdir" -type f -name "$BINARY" -print | head -n 1)
 [ -n "$executable" ] || fail "could not find executable $BINARY in $asset_name"
 mkdir -p "$INSTALL_DIR" || fail "could not create $INSTALL_DIR"
 install -m 0755 "$executable" "$INSTALL_DIR/$BINARY" || fail "could not install $BINARY"
