@@ -33,7 +33,7 @@ INSTALL_DIR="$HOME/bin" ./install.sh
 --binary NAME
 --workflow PATH
 --asset-pattern PATTERN
---checksum-pattern PATTERN
+--checksum-pattern PATTERN  # default: SHA256SUMS
 --verification attestation|attestation-or-checksum|checksum|none
 ```
 

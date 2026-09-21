@@ -22,9 +22,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("insmith generate", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	binary := flags.String("binary", "", "binary name (defaults to repository name)")
-	workflow := flags.String("workflow", "", "release workflow path for attestation verification")
+	workflow := flags.String("workflow", "release-build.yaml", "release workflow path for attestation verification")
 	assetPattern := flags.String("asset-pattern", "", "asset name pattern using {binary}, {version}, {os}, and {arch}")
-	checksumPattern := flags.String("checksum-pattern", "checksums.txt", "checksum asset name pattern")
+	checksumPattern := flags.String("checksum-pattern", "SHA256SUMS", "checksum asset name pattern")
 	verification := flags.String("verification", "attestation-or-checksum", "verification policy: attestation, attestation-or-checksum, checksum, or none")
 	if err := flags.Parse(args); err != nil {
 		return err
