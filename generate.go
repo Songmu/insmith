@@ -257,9 +257,6 @@ check_archive_member() {
 	case "/$member/" in
 		*/../*) fail "archive contains a path traversal entry: $member" ;;
 	esac
-	case "$member" in
-		../*|*/..) fail "archive contains a path traversal entry: $member" ;;
-	esac
 }
 
 check_archive_types() {
@@ -298,7 +295,7 @@ case "$asset_name" in
 		done <<-EOF
 		$zip_names
 		EOF
-		zip_types=$(unzip -Z "$artifact") || fail "could not list $asset_name contents"
+		zip_types=$(unzip -Z -s "$artifact") || fail "could not list $asset_name contents"
 		check_archive_types "$zip_types"
 		unzip -q "$artifact" -d "$extractdir"
 		;;
