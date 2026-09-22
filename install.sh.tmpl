@@ -1,0 +1,370 @@
+REPOSITORY={{.Repository}}
+NAME={{.Name}}
+BINARIES={{.Binaries}}
+WORKFLOW={{.Workflow}}
+ASSET_PATTERN={{.AssetPattern}}
+CHECKSUM_PATTERN={{.ChecksumPattern}}
+VERIFICATION={{.Verification}}
+
+log_prefix() {
+	printf '%s\n' "$REPOSITORY"
+}
+
+fail() {
+	log_crit "$*"
+	exit 1
+}
+
+usage() {
+	status=${1:-2}
+	cat >&2 <<EOF
+Usage: $0 [-b bindir] [tag]
+
+  -b bindir  installation directory (default: BINDIR or ./bin)
+  -d         enable debug logging
+  -h         show this help
+  -x         enable shell execution tracing
+EOF
+	exit "$status"
+}
+
+need() {
+	is_command "$1" || fail "required command not found: $1"
+}
+
+cleanup() {
+	if [ -n "${install_manifest:-}" ] && [ -f "$install_manifest" ]; then
+		tab=$(printf '\t')
+		while IFS="$tab" read -r install_tmp install_destination; do
+			[ -z "$install_tmp" ] || rm -f "$install_tmp"
+		done < "$install_manifest"
+	fi
+	if [ -n "${tmpdir:-}" ]; then
+		rm -rf "$tmpdir"
+		tmpdir=
+	fi
+}
+
+parse_args() {
+	BINDIR=${BINDIR:-./bin}
+	while getopts "b:dhx" arg; do
+		case "$arg" in
+			b) BINDIR=$OPTARG ;;
+			d) log_set_priority 10 ;;
+			h) usage 0 ;;
+			x) set -x ;;
+			*) usage 2 ;;
+		esac
+	done
+	shift $((OPTIND - 1))
+	[ "$#" -le 1 ] || usage 2
+	[ -n "$BINDIR" ] || fail "installation directory must not be empty"
+	requested_tag=${1:-}
+}
+
+line_count() {
+	sed '/^$/d' | wc -l | tr -d ' '
+}
+
+verify_checksum() {
+	checksum_name=$(printf '%s' "$CHECKSUM_PATTERN" |
+		sed -e "s/{version}/$TAG/g" -e "s/{name}/$NAME/g" -e "s/{os}/$OS/g" -e "s/{arch}/$ARCH/g")
+	checksum_url="$GITHUB_DOWNLOAD/$TAG/$checksum_name"
+	checksums="$tmpdir/$checksum_name"
+	http_download "$checksums" "$checksum_url" || fail "could not download checksums"
+	hash_sha256_verify "$artifact" "$checksums" ||
+		fail "checksum verification failed for $asset_name"
+	log_info "verified SHA-256 checksum for $asset_name"
+}
+
+attestation_capability() {
+	is_command gh || return 2
+	is_command git || return 2
+	is_command grep || return 2
+	# gh <= 2.92.0 may expose credentials to untrusted TUF mirrors during
+	# attestation verification (GHSA-8xvp-7hj6-mcj9).
+	gh --version 2>/dev/null | awk '
+		NR == 1 {
+			if ($3 !~ /^[0-9]+\.[0-9]+\.[0-9]+$/) exit 1
+			split($3, version, ".")
+			exit !(version[1] > 2 || (version[1] == 2 && version[2] >= 93))
+		}
+		END { if (NR == 0) exit 1 }
+	' || return 2
+	gh attestation verify --help 2>/dev/null | grep -q -- '--signer-digest' || return 2
+}
+
+resolve_tag_commit() {
+	refs=$(git ls-remote "https://github.com/$REPOSITORY.git" \
+		"refs/tags/$TAG" "refs/tags/$TAG^{}") || return 1
+	printf '%s\n' "$refs" | awk '
+		$2 ~ /\^\{\}$/ { peeled = $1 }
+		$2 !~ /\^\{\}$/ { direct = $1 }
+		END {
+			if (peeled != "") print peeled
+			else if (direct != "") print direct
+		}
+	'
+}
+
+verify_attestation() {
+	attestation_capability || return 2
+	commit=$(resolve_tag_commit) || return 3
+	[ -n "$commit" ] || return 3
+	log_info "verifying build provenance for $asset_name"
+	if [ -n "$WORKFLOW" ]; then
+		gh attestation verify "$artifact" \
+			--repo "$REPOSITORY" \
+			--source-digest "$commit" \
+			--signer-digest "$commit" \
+			--signer-workflow "$WORKFLOW" || return 1
+	else
+		gh attestation verify "$artifact" \
+			--repo "$REPOSITORY" \
+			--source-digest "$commit" \
+			--signer-digest "$commit" || return 1
+	fi
+}
+
+verify_artifact() {
+	case "$VERIFICATION" in
+		none) ;;
+		checksum) verify_checksum ;;
+		attestation)
+			if verify_attestation; then
+				:
+			else
+				status=$?
+				case "$status" in
+					2) fail "GitHub attestation verification is unavailable" ;;
+					3) fail "could not resolve release tag $TAG to a commit" ;;
+					*) fail "attestation verification failed" ;;
+				esac
+			fi
+			;;
+		attestation-or-checksum)
+			if verify_attestation; then
+				:
+			else
+				status=$?
+				case "$status" in
+					2)
+						log_info "build provenance verification unavailable; falling back to SHA-256"
+						verify_checksum
+						;;
+					3) fail "could not resolve release tag $TAG to a commit" ;;
+					*) fail "attestation verification failed" ;;
+				esac
+			fi
+			;;
+	esac
+}
+
+check_archive_member() {
+	member=$1
+	case "$member" in
+		/*) fail "archive contains an absolute path: $member" ;;
+	esac
+	case "/$member/" in
+		*/../*) fail "archive contains a path traversal entry: $member" ;;
+	esac
+}
+
+check_zip_member() {
+	member=$1
+	check_archive_member "$member"
+	case "$member" in
+		*\\*) fail "archive contains a Windows path separator: $member" ;;
+		[A-Za-z]:*) fail "archive contains a drive-qualified path: $member" ;;
+	esac
+}
+
+check_tar_types() {
+	while IFS= read -r line; do
+		case "$line" in
+			-*|d*) ;;
+			l*) fail "archive contains a symlink entry which is not supported" ;;
+			h*) fail "archive contains a hard link entry which is not supported" ;;
+			*) fail "archive contains an unsupported entry type" ;;
+		esac
+	done <<-EOF
+	$1
+	EOF
+}
+
+check_zip_types() {
+	listing=$1
+	expected=$2
+	attributes=$(printf '%s\n' "$listing" |
+		awk '$2 ~ /^[0-9]+\.[0-9]+$/ { print $1 }')
+	[ "$(printf '%s\n' "$attributes" | line_count)" -eq "$expected" ] ||
+		fail "could not validate all zip entry types"
+	while IFS= read -r attribute; do
+		case "$attribute" in
+			-*) ;;
+			d*) ;;
+			l*) fail "archive contains a symlink entry which is not supported" ;;
+			h*) fail "archive contains a hard link entry which is not supported" ;;
+			b*|c*|p*|s*) fail "archive contains an unsupported entry type" ;;
+			*) fail "archive contains an unknown entry type" ;;
+		esac
+	done <<-EOF
+	$attributes
+	EOF
+}
+
+download_artifact() {
+	asset_base=$(printf '%s' "$ASSET_PATTERN" |
+		sed -e "s/{name}/$NAME/g" -e "s/{version}/$TAG/g" -e "s/{os}/$OS/g" -e "s/{arch}/$ARCH/g")
+	case "$OS" in
+		darwin|windows) extensions='.zip .tar.gz .exe raw' ;;
+		*) extensions='.tar.gz .zip .exe raw' ;;
+	esac
+	for extension in $extensions; do
+		if [ "$extension" = ".exe" ] && [ "$OS" != "windows" ]; then
+			continue
+		fi
+		if [ "$extension" = "raw" ]; then
+			extension=
+		fi
+		candidate=$asset_base$extension
+		candidate_url="$GITHUB_DOWNLOAD/$TAG/$candidate"
+		candidate_artifact="$tmpdir/$candidate"
+		if http_download "$candidate_artifact" "$candidate_url" 2>/dev/null; then
+			artifact=$candidate_artifact
+			asset_name=$candidate
+			return
+		else
+			rm -f "$candidate_artifact"
+		fi
+	done
+	fail "could not download an asset matching $asset_base (.tar.gz, .zip, .exe, or raw binary)"
+}
+
+extract_artifact() {
+	raw_artifact=false
+	extractdir="$tmpdir/extract"
+	mkdir -p "$extractdir" || fail "could not create extraction directory"
+	case "$asset_name" in
+		*.tar.gz)
+			need tar
+			tar_listing=$(tar -tvzf "$artifact") || fail "could not list $asset_name contents"
+			check_tar_types "$tar_listing"
+			tar_names=$(tar -tzf "$artifact") || fail "could not list $asset_name contents"
+			while IFS= read -r member; do
+				[ -n "$member" ] || continue
+				check_archive_member "$member"
+			done <<-EOF
+			$tar_names
+			EOF
+			tar -xzf "$artifact" -C "$extractdir" || fail "could not extract $asset_name"
+			;;
+		*.zip)
+			need unzip
+			zip_names=$(unzip -Z1 "$artifact") || fail "could not list $asset_name contents"
+			while IFS= read -r member; do
+				[ -n "$member" ] || continue
+				check_zip_member "$member"
+			done <<-EOF
+			$zip_names
+			EOF
+			zip_types=$(unzip -Z -s "$artifact") || fail "could not list $asset_name contents"
+			zip_count=$(printf '%s\n' "$zip_names" | line_count)
+			check_zip_types "$zip_types" "$zip_count"
+			unzip -q "$artifact" -d "$extractdir" || fail "could not extract $asset_name"
+			;;
+		*)
+			raw_artifact=true
+			;;
+	esac
+}
+
+platform_binary_name() {
+	binary=$1
+	if [ "$OS" = "windows" ]; then
+		case "$binary" in
+			*.exe) printf '%s\n' "$binary" ;;
+			*) printf '%s.exe\n' "$binary" ;;
+		esac
+	else
+		printf '%s\n' "$binary"
+	fi
+}
+
+prepare_install() {
+	executable=$1
+	executable_name=$2
+	install_tmp=$(mktemp "${BINDIR%/}/.${executable_name}.XXXXXX") ||
+		fail "could not create temporary file in $BINDIR"
+	printf '%s\t%s\n' "$install_tmp" "$BINDIR/$executable_name" >> "$install_manifest" ||
+		fail "could not record temporary install for $executable_name"
+	install -m 0755 "$executable" "$install_tmp" ||
+		fail "could not prepare $executable_name"
+}
+
+prepare_binaries() {
+	need install
+	need mv
+	set -- $BINARIES
+	if [ "$raw_artifact" = "true" ] && [ "$#" -ne 1 ]; then
+		fail "raw artifacts can install exactly one binary"
+	fi
+	install -d "$BINDIR" || fail "could not create $BINDIR"
+	for binary do
+		executable_name=$(platform_binary_name "$binary")
+		if [ "$raw_artifact" = "true" ]; then
+			executable=$artifact
+		else
+			executables=$(find "$extractdir" -type f -name "$executable_name" -print)
+			[ "$(printf '%s\n' "$executables" | line_count)" -eq 1 ] ||
+				fail "archive must contain exactly one executable named $executable_name"
+			executable=$executables
+		fi
+		prepare_install "$executable" "$executable_name"
+	done
+}
+
+commit_installs() {
+	tab=$(printf '\t')
+	while IFS="$tab" read -r install_tmp install_destination; do
+		mv -f "$install_tmp" "$install_destination" ||
+			fail "could not install ${install_destination##*/}"
+		printf 'Installed %s to %s\n' "${install_destination##*/}" "$install_destination"
+	done < "$install_manifest"
+}
+
+main() {
+	parse_args "$@"
+	for command in awk cat cut find mkdir mktemp rm sed tr wc; do
+		need "$command"
+	done
+
+	TAG=$(github_release "$REPOSITORY" "$requested_tag") ||
+		fail "could not determine release tag ${requested_tag:-latest}"
+	OS=$(uname_os)
+	ARCH=$(uname_arch)
+	case "$OS/$ARCH" in
+		linux/amd64|linux/arm64|darwin/amd64|darwin/arm64|windows/amd64|windows/arm64) ;;
+		*) fail "unsupported platform: $OS/$ARCH" ;;
+	esac
+	GITHUB_DOWNLOAD="https://github.com/$REPOSITORY/releases/download"
+
+	tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/insmith.XXXXXX") ||
+		fail "could not create temporary directory"
+	install_manifest="$tmpdir/install-manifest"
+	: > "$install_manifest"
+	trap cleanup 0
+	trap 'exit 1' HUP INT TERM
+
+	log_info "found version: $TAG for $OS/$ARCH"
+	download_artifact
+	verify_artifact
+	extract_artifact
+	prepare_binaries
+	commit_installs
+
+	cleanup
+	trap - 0 HUP INT TERM
+}
+
+main "$@"
