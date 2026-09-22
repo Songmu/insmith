@@ -21,6 +21,13 @@ type config struct {
 	verification    string
 }
 
+const (
+	verificationNone                  = "none"
+	verificationChecksum              = "checksum"
+	verificationAttestation           = "attestation"
+	verificationAttestationOrChecksum = "attestation-or-checksum"
+)
+
 type stringListFlag []string
 
 func (f *stringListFlag) String() string {
@@ -46,7 +53,7 @@ func runGenerator(args []string, stdout, stderr io.Writer) error {
 	workflow := flags.String("workflow", "release-build.yaml", "release workflow path for attestation verification (empty disables workflow pinning)")
 	assetPattern := flags.String("asset-pattern", "", "asset name pattern using {name}, {version}, {os}, and {arch}")
 	checksumPattern := flags.String("checksum-pattern", "SHA256SUMS", "checksum asset name pattern")
-	verification := flags.String("verification", "attestation-or-checksum", "verification policy: attestation, attestation-or-checksum, checksum, or none")
+	verification := flags.String("verification", verificationAttestationOrChecksum, "verification policy: attestation, attestation-or-checksum, checksum, or none")
 	showVersion := flags.Bool("version", false, "display version")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -120,11 +127,11 @@ func generate(c config) (string, error) {
 		c.workflow = c.repository + "/" + c.workflow
 	}
 	switch c.verification {
-	case "attestation", "attestation-or-checksum", "checksum", "none":
+	case verificationAttestation, verificationAttestationOrChecksum, verificationChecksum, verificationNone:
 	default:
 		return "", fmt.Errorf("unknown verification policy %q", c.verification)
 	}
-	if c.checksumPattern == "" && c.verification != "none" && c.verification != "attestation" {
+	if c.checksumPattern == "" && c.verification != verificationNone && c.verification != verificationAttestation {
 		return "", fmt.Errorf("checksum pattern must not be empty when checksum verification is enabled")
 	}
 
@@ -145,8 +152,8 @@ func generate(c config) (string, error) {
 		Workflow:                shellQuote(c.workflow),
 		AssetPattern:            shellQuote(c.assetPattern),
 		ChecksumPattern:         shellQuote(c.checksumPattern),
-		ChecksumVerification:    c.verification == "checksum" || c.verification == "attestation-or-checksum",
-		AttestationVerification: c.verification == "attestation" || c.verification == "attestation-or-checksum",
+		ChecksumVerification:    c.verification == verificationChecksum || c.verification == verificationAttestationOrChecksum,
+		AttestationVerification: c.verification == verificationAttestation || c.verification == verificationAttestationOrChecksum,
 	}); err != nil {
 		return "", err
 	}

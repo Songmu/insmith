@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -127,6 +128,11 @@ func TestGenerateVerificationSpecialization(t *testing.T) {
 				if strings.Contains(script, text) {
 					t.Errorf("generated script unexpectedly contains %q", text)
 				}
+			}
+			cmd := exec.Command("/bin/sh", "-n")
+			cmd.Stdin = strings.NewReader(script)
+			if output, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("generated script is invalid: %v\n%s", err, output)
 			}
 		})
 	}
