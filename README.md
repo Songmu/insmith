@@ -87,7 +87,7 @@ defaults:
 | `--checksum-pattern PATTERN` | Uses `SHA256SUMS`. |
 | `--verification POLICY` | Uses `attestation-or-checksum`. Other policies are `attestation`, `checksum`, and `none`. |
 | `--version` | Generates an installer unless this flag is present; with the flag, prints the insmith version and exits. |
-| `-w` | Writes the generated installer to `install.sh` with mode `0755`, overwriting it if it exists, instead of writing to standard output. |
+| `-w` | Writes the generated installer to `install.sh`, overwriting it if it exists, instead of writing to standard output. Sets mode `0755` on platforms that support POSIX permissions. |
 
 The package name defaults to the repository name and is available to asset
 patterns as `{name}`. Each `--binary` identifies an executable inside the
