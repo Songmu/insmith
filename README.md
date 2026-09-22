@@ -58,6 +58,12 @@ Each binary is prepared with `install -m 0755` in a temporary file inside
 `BINDIR`, then atomically renamed over its destination. All configured
 binaries are prepared before any destination is replaced.
 
+Generated installers require POSIX `sh` and standard Unix tools, and can
+download with `curl`, `wget`, `fetch`, `ftp`, Python 3, or Node.js. They
+require `tar` or `unzip` for the selected archive format. `git` and a safe
+GitHub CLI version with attestation digest support are optional in the default
+mode; when unavailable, the installer verifies the release checksum.
+
 ## Options
 
 ```text
@@ -87,22 +93,6 @@ By default, provenance is also pinned to
 omits only the workflow constraint; repository, source commit, and signer
 commit constraints remain enabled.
 
-Generated installers include a fixed excerpt based on `client9/shlib`
-v2026.08.30 (`3593994`). It selects the command, logging, platform, archive,
-download, GitHub Release, and SHA-256 helpers needed by insmith, while omitting
-unselected functions and upstream explanatory comments. The only behavioral
-divergence is in `http_download_curl`, where insmith adds `--proto '=https'`
-and `--tlsv1.2` to reject plaintext or downgraded transports.
-
-The generated script also retains attribution to the installer lineage from
-`goreleaser/godownloader` through `Songmu/godzil` and `Songmu/gitrail`.
-
-Generated installers require POSIX `sh` and standard Unix tools, and can
-download with `curl`, `wget`, `fetch`, `ftp`, Python 3, or Node.js. They
-require `tar` or `unzip` for the selected archive format. `git` and a safe
-GitHub CLI version with attestation digest support are optional in the default
-mode; when unavailable, the installer verifies the release checksum.
-
 ## Synopsis
 
 ```console
@@ -126,6 +116,11 @@ insmith [flags] OWNER/REPO
 # go install
 % go install github.com/Songmu/insmith/cmd/insmith@latest
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and
+implementation notes.
 
 ## Author
 
