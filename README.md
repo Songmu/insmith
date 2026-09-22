@@ -28,7 +28,7 @@ chmod +x install.sh
 The repository can also be specified explicitly:
 
 ```sh
-go run ./cmd/insmith --workflow release-build.yaml Songmu/gitrail > install.sh
+go run github.com/Songmu/insmith/cmd/insmith@latest owner/repo > install.sh
 chmod +x install.sh
 ```
 
@@ -77,14 +77,18 @@ mode; when unavailable, the installer verifies the release checksum.
 
 ## Options
 
-```text
---name NAME
---binary NAME  # repeatable; defaults to --name
---workflow PATH  # default: release-build.yaml; empty disables workflow pinning
---asset-pattern PATTERN
---checksum-pattern PATTERN  # default: SHA256SUMS
---verification attestation|attestation-or-checksum|checksum|none
-```
+All generator options are optional. When omitted, insmith uses the following
+defaults:
+
+| Option | Default behavior |
+| --- | --- |
+| `--name NAME` | Uses the repository name. |
+| `--binary NAME` | Installs one binary named after `--name`. May be repeated to install multiple binaries. |
+| `--workflow PATH` | Uses `release-build.yaml` when it exists; otherwise omits workflow pinning. An empty value (`--workflow=`) always omits workflow pinning. |
+| `--asset-pattern PATTERN` | Uses `{name}_{version}_{os}_{arch}`. |
+| `--checksum-pattern PATTERN` | Uses `SHA256SUMS`. |
+| `--verification POLICY` | Uses `attestation-or-checksum`. Other policies are `attestation`, `checksum`, and `none`. |
+| `--version` | Generates an installer unless this flag is present; with the flag, prints the insmith version and exits. |
 
 The package name defaults to the repository name and is available to asset
 patterns as `{name}`. Each `--binary` identifies an executable inside the
@@ -99,12 +103,11 @@ verification is attempted, a failed attestation or unresolved release tag
 aborts installation without downgrading to checksums.
 
 By default, provenance is also pinned to
-`OWNER/REPO/.github/workflows/release-build.yaml`, matching gitrail. Use
-`--workflow PATH` for a differently named release workflow. If the default
-workflow does not exist, workflow pinning is omitted. An explicitly specified
-workflow must exist or generation fails. `--workflow=` omits only the workflow
-constraint; repository, source commit, and signer commit constraints remain
-enabled.
+`OWNER/REPO/.github/workflows/release-build.yaml`. Use `--workflow PATH` for a
+differently named release workflow. If the default workflow does not exist,
+workflow pinning is omitted. An explicitly specified workflow must exist or
+generation fails. `--workflow=` omits only the workflow constraint; repository,
+source commit, and signer commit constraints remain enabled.
 
 ## Synopsis
 
