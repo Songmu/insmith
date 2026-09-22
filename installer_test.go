@@ -786,21 +786,21 @@ func setupArtifact(t *testing.T, version, assetName, body string, mode os.FileMo
 // arguments to ghLog (if non-empty) before exiting with verifyExit.
 func writeFakeGH(t *testing.T, dir string, verifyExit int, ghLog string) {
 	t.Helper()
-	finish := fmt.Sprintf("exit %d", verifyExit)
-	if ghLog != "" {
-		finish = fmt.Sprintf("printf '%%s\\n' \"$*\" > %s\nexit %d", shellQuote(ghLog), verifyExit)
-	}
-	writeCommand(t, dir, "gh", fmt.Sprintf(`
+	const header = `
 if [ "$1" = "--version" ]; then
 	printf 'gh version 2.93.0 (test)\n'
 	exit 0
 fi
 if [ "$1" = "attestation" ] && [ "$2" = "verify" ] && [ "$3" = "--help" ]; then
-	printf '%%s\n' '--signer-digest'
+	printf '%s\n' '--signer-digest'
 	exit 0
 fi
-%s
-`, finish))
+`
+	if ghLog == "" {
+		writeCommand(t, dir, "gh", header+fmt.Sprintf("exit %d", verifyExit))
+		return
+	}
+	writeCommand(t, dir, "gh", header+fmt.Sprintf("printf '%%s\\n' \"$*\" > %s\nexit %d", shellQuote(ghLog), verifyExit))
 }
 
 func installerEnvironment(t *testing.T, artifact, assetName, version string) ([]string, string) {
