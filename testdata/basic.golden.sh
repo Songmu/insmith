@@ -456,7 +456,6 @@ BINARIES='gitrail'
 WORKFLOW='Songmu/gitrail/.github/workflows/release-build.yaml'
 ASSET_PATTERN='{name}_{version}_{os}_{arch}'
 CHECKSUM_PATTERN='SHA256SUMS'
-VERIFICATION='attestation-or-checksum'
 
 log_prefix() {
 	printf '%s\n' "$REPOSITORY"
@@ -579,37 +578,19 @@ verify_attestation() {
 }
 
 verify_artifact() {
-	case "$VERIFICATION" in
-		none) ;;
-		checksum) verify_checksum ;;
-		attestation)
-			if verify_attestation; then
-				:
-			else
-				status=$?
-				case "$status" in
-					2) fail "GitHub attestation verification is unavailable" ;;
-					3) fail "could not resolve release tag $TAG to a commit" ;;
-					*) fail "attestation verification failed" ;;
-				esac
-			fi
-			;;
-		attestation-or-checksum)
-			if verify_attestation; then
-				:
-			else
-				status=$?
-				case "$status" in
-					2)
-						log_info "build provenance verification unavailable; falling back to SHA-256"
-						verify_checksum
-						;;
-					3) fail "could not resolve release tag $TAG to a commit" ;;
-					*) fail "attestation verification failed" ;;
-				esac
-			fi
-			;;
-	esac
+	if verify_attestation; then
+		:
+	else
+		status=$?
+		case "$status" in
+			2)
+				log_info "build provenance verification unavailable; falling back to SHA-256"
+				verify_checksum
+				;;
+			3) fail "could not resolve release tag $TAG to a commit" ;;
+			*) fail "attestation verification failed" ;;
+		esac
+	fi
 }
 
 check_archive_member() {
