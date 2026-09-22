@@ -125,9 +125,7 @@ func TestGeneratedInstallerFallsBackWithoutGH(t *testing.T) {
 	}
 	const version = "v1.2.3"
 	assetName := "repo_" + version + "_linux_amd64"
-	artifact := filepath.Join(t.TempDir(), assetName)
-	writeFile(t, artifact, "binary", 0o755)
-	env, curlLog := installerEnvironment(t, artifact, assetName, version)
+	env, curlLog := setupArtifact(t, version, assetName, "binary", 0o755)
 	fakeBin := envValue(env, "FAKE_BIN")
 	if err := os.Remove(filepath.Join(fakeBin, "gh")); err != nil {
 		t.Fatal(err)
@@ -191,9 +189,7 @@ func TestGeneratedInstallerAttestationSuccess(t *testing.T) {
 	}
 	const version = "v1.2.3"
 	assetName := "repo_" + version + "_linux_amd64"
-	artifact := filepath.Join(t.TempDir(), assetName)
-	writeFile(t, artifact, "binary", 0o755)
-	env, curlLog := installerEnvironment(t, artifact, assetName, version)
+	env, curlLog := setupArtifact(t, version, assetName, "binary", 0o755)
 	fakeBin := envValue(env, "FAKE_BIN")
 	ghLog := filepath.Join(t.TempDir(), "gh.log")
 	env = append(env, "GH_LOG="+ghLog)
@@ -201,18 +197,7 @@ func TestGeneratedInstallerAttestationSuccess(t *testing.T) {
 printf '%s\t%s\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "refs/tags/$FAKE_TAG"
 printf '%s\t%s\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb "refs/tags/$FAKE_TAG^{}"
 `)
-	writeCommand(t, fakeBin, "gh", `
-if [ "$1" = "--version" ]; then
-	printf 'gh version 2.93.0 (test)\n'
-	exit 0
-fi
-if [ "$1" = "attestation" ] && [ "$2" = "verify" ] && [ "$3" = "--help" ]; then
-	printf '%s\n' '--signer-digest'
-	exit 0
-fi
-printf '%s\n' "$*" > "$GH_LOG"
-exit 0
-`)
+	writeFakeGH(t, fakeBin, 0, ghLog)
 	result := runGeneratedInstaller(t, config{
 		repository:   "owner/repo",
 		workflow:     "release-build.yaml",
@@ -244,9 +229,7 @@ func TestGeneratedInstallerDebugOptions(t *testing.T) {
 	}
 	const version = "v1.2.3"
 	assetName := "repo_" + version + "_linux_amd64"
-	artifact := filepath.Join(t.TempDir(), assetName)
-	writeFile(t, artifact, "binary", 0o755)
-	env, _ := installerEnvironment(t, artifact, assetName, version)
+	env, _ := setupArtifact(t, version, assetName, "binary", 0o755)
 	result := runGeneratedInstaller(t, config{
 		repository:   "owner/repo",
 		verification: "none",
@@ -268,9 +251,7 @@ func TestGeneratedInstallerUsesAtomicInstall(t *testing.T) {
 	}
 	const version = "v1.2.3"
 	assetName := "repo_" + version + "_linux_amd64"
-	artifact := filepath.Join(t.TempDir(), assetName)
-	writeFile(t, artifact, "new", 0o644)
-	env, _ := installerEnvironment(t, artifact, assetName, version)
+	env, _ := setupArtifact(t, version, assetName, "new", 0o644)
 	fakeBin := envValue(env, "FAKE_BIN")
 	realInstall, err := exec.LookPath("install")
 	if err != nil {
@@ -508,8 +489,6 @@ func TestGeneratedInstallerDoesNotDowngradeFailures(t *testing.T) {
 	}
 	const version = "v1.2.3"
 	assetName := "repo_" + version + "_linux_amd64"
-	artifact := filepath.Join(t.TempDir(), assetName)
-	writeFile(t, artifact, "binary", 0o755)
 
 	tests := []struct {
 		name       string
@@ -527,20 +506,10 @@ func TestGeneratedInstallerDoesNotDowngradeFailures(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			env, curlLog := installerEnvironment(t, artifact, assetName, version)
+			env, curlLog := setupArtifact(t, version, assetName, "binary", 0o755)
 			fakeBin := envValue(env, "FAKE_BIN")
 			writeCommand(t, fakeBin, "git", tt.gitBody)
-			writeCommand(t, fakeBin, "gh", fmt.Sprintf(`
-if [ "$1" = "--version" ]; then
-	printf 'gh version 2.93.0 (test)\n'
-	exit 0
-fi
-if [ "$1" = "attestation" ] && [ "$2" = "verify" ] && [ "$3" = "--help" ]; then
-	printf '%%s\n' '--signer-digest'
-	exit 0
-fi
-exit %d
-`, tt.verifyExit))
+			writeFakeGH(t, fakeBin, tt.verifyExit, "")
 
 			result := runGeneratedInstaller(t, config{
 				repository:      "owner/repo",
@@ -567,8 +536,6 @@ func TestGeneratedInstallerRejectsInvalidChecksums(t *testing.T) {
 	}
 	const version = "v1.2.3"
 	assetName := "repo_" + version + "_linux_amd64"
-	artifact := filepath.Join(t.TempDir(), assetName)
-	writeFile(t, artifact, "binary", 0o755)
 	validHash := fmt.Sprintf("%x", sha256.Sum256([]byte("binary")))
 	tests := []struct {
 		name      string
@@ -585,7 +552,7 @@ func TestGeneratedInstallerRejectsInvalidChecksums(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			env, _ := installerEnvironment(t, artifact, assetName, version)
+			env, _ := setupArtifact(t, version, assetName, "binary", 0o755)
 			writeFile(t, envValue(env, "CHECKSUMS"), tt.checksums, 0o644)
 			result := runGeneratedInstaller(t, config{
 				repository:      "owner/repo",
@@ -802,6 +769,38 @@ func runGeneratedInstaller(t *testing.T, cfg config, env []string, args ...strin
 	}
 	output, err := cmd.CombinedOutput()
 	return installerResult{output: string(output), err: err}
+}
+
+// setupArtifact writes a single-file artifact and wires up the fake
+// installer environment for it, returning the environment and the path to
+// the curl invocation log.
+func setupArtifact(t *testing.T, version, assetName, body string, mode os.FileMode) ([]string, string) {
+	t.Helper()
+	artifact := filepath.Join(t.TempDir(), assetName)
+	writeFile(t, artifact, body, mode)
+	return installerEnvironment(t, artifact, assetName, version)
+}
+
+// writeFakeGH installs a fake gh command that reports the given version,
+// supports --signer-digest attestation verification, and otherwise logs its
+// arguments to ghLog (if non-empty) before exiting with verifyExit.
+func writeFakeGH(t *testing.T, dir string, verifyExit int, ghLog string) {
+	t.Helper()
+	const header = `
+if [ "$1" = "--version" ]; then
+	printf 'gh version 2.93.0 (test)\n'
+	exit 0
+fi
+if [ "$1" = "attestation" ] && [ "$2" = "verify" ] && [ "$3" = "--help" ]; then
+	printf '%s\n' '--signer-digest'
+	exit 0
+fi
+`
+	if ghLog == "" {
+		writeCommand(t, dir, "gh", header+fmt.Sprintf("exit %d", verifyExit))
+		return
+	}
+	writeCommand(t, dir, "gh", header+fmt.Sprintf("printf '%%s\\n' \"$*\" > %s\nexit %d", shellQuote(ghLog), verifyExit))
 }
 
 func installerEnvironment(t *testing.T, artifact, assetName, version string) ([]string, string) {

@@ -83,47 +83,42 @@ func TestGenerateGolden(t *testing.T) {
 }
 
 func TestGenerateValidation(t *testing.T) {
-	_, err := generate(config{repository: "invalid", verification: "none"})
-	if err == nil {
-		t.Error("generate accepted an invalid repository")
+	type testCase struct {
+		name string
+		cfg  config
 	}
-	_, err = generate(config{repository: "owner/repo", verification: "unknown"})
-	if err == nil {
-		t.Error("generate accepted an invalid verification policy")
-	}
-	_, err = generate(config{repository: "owner/repo", name: "bad/name", verification: "none"})
-	if err == nil {
-		t.Error("generate accepted an unsafe name")
-	}
-	_, err = generate(config{repository: "owner/repo", binaries: []string{"good", "bad/name"}, verification: "none"})
-	if err == nil {
-		t.Error("generate accepted an unsafe binary name")
-	}
-	_, err = generate(config{repository: "owner/repo", binaries: []string{"duplicate", "duplicate"}, verification: "none"})
-	if err == nil {
-		t.Error("generate accepted duplicate binary names")
-	}
-	_, err = generate(config{repository: "owner/repo", checksumPattern: "bad/path", verification: "checksum"})
-	if err == nil {
-		t.Error("generate accepted an unsafe checksum pattern")
+	tests := []testCase{
+		{"invalid repository", config{repository: "invalid", verification: "none"}},
+		{"invalid verification policy", config{repository: "owner/repo", verification: "unknown"}},
+		{"unsafe name", config{repository: "owner/repo", name: "bad/name", verification: "none"}},
+		{"unsafe binary name", config{repository: "owner/repo", binaries: []string{"good", "bad/name"}, verification: "none"}},
+		{"duplicate binary names", config{repository: "owner/repo", binaries: []string{"duplicate", "duplicate"}, verification: "none"}},
+		{"unsafe checksum pattern", config{repository: "owner/repo", checksumPattern: "bad/path", verification: "checksum"}},
 	}
 	for _, pattern := range []string{"{unknown}", "{binary}", "{name", "name}"} {
-		if _, err := generate(config{repository: "owner/repo", assetPattern: pattern, verification: "none"}); err == nil {
-			t.Errorf("generate accepted an invalid asset pattern %q", pattern)
-		}
+		tests = append(tests, testCase{
+			name: "invalid asset pattern " + pattern,
+			cfg:  config{repository: "owner/repo", assetPattern: pattern, verification: "none"},
+		})
 	}
 	for _, repository := range []string{"owner/repo?foo=bar", "owner/repo#fragment", "own?er/repo", "owner/repo/name", "./repo", "../repo", "owner/.", "owner/.."} {
-		if _, err := generate(config{repository: repository, verification: "none"}); err == nil {
-			t.Errorf("generate accepted an invalid repository %q", repository)
-		}
+		tests = append(tests, testCase{
+			name: "invalid repository " + repository,
+			cfg:  config{repository: repository, verification: "none"},
+		})
 	}
 	for _, name := range []string{".", ".."} {
-		if _, err := generate(config{repository: "owner/repo", name: name, verification: "none"}); err == nil {
-			t.Errorf("generate accepted an unsafe name %q", name)
-		}
-		if _, err := generate(config{repository: "owner/repo", binaries: []string{name}, verification: "none"}); err == nil {
-			t.Errorf("generate accepted an unsafe binary name %q", name)
-		}
+		tests = append(tests,
+			testCase{name: "unsafe name " + name, cfg: config{repository: "owner/repo", name: name, verification: "none"}},
+			testCase{name: "unsafe binary name " + name, cfg: config{repository: "owner/repo", binaries: []string{name}, verification: "none"}},
+		)
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := generate(tt.cfg); err == nil {
+				t.Errorf("generate accepted config %+v", tt.cfg)
+			}
+		})
 	}
 }
 
