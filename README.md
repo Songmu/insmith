@@ -94,6 +94,9 @@ unselected functions and upstream explanatory comments. The only behavioral
 divergence is in `http_download_curl`, where insmith adds `--proto '=https'`
 and `--tlsv1.2` to reject plaintext or downgraded transports.
 
+The generated script also retains attribution to the installer lineage from
+`goreleaser/godownloader` through `Songmu/godzil` and `Songmu/gitrail`.
+
 Generated installers require POSIX `sh` and standard Unix tools, and can
 download with `curl`, `wget`, `fetch`, `ftp`, Python 3, or Node.js. They
 require `tar` or `unzip` for the selected archive format. `git` and a safe
