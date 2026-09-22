@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"text/template"
 	"time"
@@ -38,6 +40,11 @@ var workflowHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 type stringListFlag []string
 
+type repositoryContext struct {
+	name string
+	root string
+}
+
 func (f *stringListFlag) String() string {
 	return strings.Join(*f, ",")
 }
@@ -51,7 +58,7 @@ func runGenerator(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	flags := flag.NewFlagSet("insmith", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "Usage: insmith [flags] OWNER/REPO")
+		fmt.Fprintln(stderr, "Usage: insmith [flags] [OWNER/REPO]")
 		fmt.Fprintln(stderr)
 		flags.PrintDefaults()
 	}
@@ -72,11 +79,12 @@ func runGenerator(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	if *showVersion {
 		return printVersion(stdout)
 	}
-	if flags.NArg() != 1 {
+	if flags.NArg() > 1 {
 		flags.Usage()
-		return errors.New("exactly one OWNER/REPO argument is required; flags must precede it")
+		return errors.New("at most one OWNER/REPO argument is allowed; flags must precede it")
 	}
-	if err := validateRepository(flags.Arg(0)); err != nil {
+	repository, err := resolveRepository(ctx, flags.Args())
+	if err != nil {
 		return err
 	}
 
@@ -88,15 +96,14 @@ func runGenerator(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	})
 	resolvedWorkflow := *workflow
 	if workflowExplicit || *verification == verificationAttestation || *verification == verificationAttestationOrChecksum {
-		var err error
-		resolvedWorkflow, err = resolveWorkflow(ctx, flags.Arg(0), resolvedWorkflow, workflowExplicit)
+		resolvedWorkflow, err = resolveWorkflow(ctx, repository, resolvedWorkflow, workflowExplicit)
 		if err != nil {
 			return err
 		}
 	}
 
 	script, err := generate(config{
-		repository:      flags.Arg(0),
+		repository:      repository.name,
 		name:            *name,
 		binaries:        binaries,
 		workflow:        resolvedWorkflow,
@@ -188,12 +195,66 @@ func validateRepository(repository string) error {
 	return nil
 }
 
-func resolveWorkflow(ctx context.Context, repository, workflow string, explicit bool) (string, error) {
-	workflow = qualifyWorkflow(repository, workflow)
+func resolveRepository(ctx context.Context, args []string) (repositoryContext, error) {
+	if len(args) == 1 {
+		if err := validateRepository(args[0]); err != nil {
+			return repositoryContext{}, err
+		}
+		return repositoryContext{name: args[0]}, nil
+	}
+	root, err := gitOutput(ctx, ".", "rev-parse", "--show-toplevel")
+	if err != nil {
+		return repositoryContext{}, fmt.Errorf("resolve local repository root: %w", err)
+	}
+	remote, err := gitOutput(ctx, root, "remote", "get-url", "origin")
+	if err != nil {
+		return repositoryContext{}, fmt.Errorf("resolve local repository origin: %w", err)
+	}
+	repository, err := githubRepositoryFromRemote(remote)
+	if err != nil {
+		return repositoryContext{}, err
+	}
+	return repositoryContext{name: repository, root: root}, nil
+}
+
+func gitOutput(ctx context.Context, directory string, args ...string) (string, error) {
+	commandArgs := append([]string{"-C", directory}, args...)
+	output, err := exec.CommandContext(ctx, "git", commandArgs...).CombinedOutput()
+	if err != nil {
+		message := strings.TrimSpace(string(output))
+		if message == "" {
+			message = err.Error()
+		}
+		return "", errors.New(message)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func githubRepositoryFromRemote(remote string) (string, error) {
+	remote = strings.TrimSpace(remote)
+	var repository string
+	if strings.HasPrefix(remote, "git@github.com:") {
+		repository = strings.TrimPrefix(remote, "git@github.com:")
+	} else {
+		parsed, err := url.Parse(remote)
+		if err != nil || !strings.EqualFold(parsed.Hostname(), "github.com") {
+			return "", fmt.Errorf("origin must point to a github.com repository")
+		}
+		repository = strings.TrimPrefix(parsed.Path, "/")
+	}
+	repository = strings.TrimSuffix(strings.TrimSuffix(repository, "/"), ".git")
+	if err := validateRepository(repository); err != nil {
+		return "", fmt.Errorf("invalid GitHub origin %q: %w", remote, err)
+	}
+	return repository, nil
+}
+
+func resolveWorkflow(ctx context.Context, repository repositoryContext, workflow string, explicit bool) (string, error) {
+	workflow = qualifyWorkflow(repository.name, workflow)
 	if workflow == "" {
 		return "", nil
 	}
-	exists, err := workflowExists(ctx, workflow)
+	exists, err := workflowExists(ctx, repository, workflow)
 	if err != nil {
 		return "", err
 	}
@@ -217,11 +278,43 @@ func qualifyWorkflow(repository, workflow string) string {
 	return repository + "/" + workflow
 }
 
-func workflowExists(ctx context.Context, workflow string) (bool, error) {
+func workflowExists(ctx context.Context, localRepository repositoryContext, workflow string) (bool, error) {
+	repository, workflowName, err := splitWorkflow(workflow)
+	if err != nil {
+		return false, err
+	}
+	if localRepository.root != "" && repository == localRepository.name {
+		return localWorkflowExists(localRepository.root, workflow, workflowName)
+	}
+	return remoteWorkflowExists(ctx, workflow, repository, workflowName)
+}
+
+func splitWorkflow(workflow string) (string, string, error) {
 	repository, workflowName, ok := strings.Cut(workflow, "/.github/workflows/")
 	if !ok || repository == "" || workflowName == "" {
+		return "", "", fmt.Errorf("invalid workflow path %q", workflow)
+	}
+	return repository, workflowName, nil
+}
+
+func localWorkflowExists(root, workflow, workflowName string) (bool, error) {
+	workflowDirectory := filepath.Join(root, ".github", "workflows")
+	workflowPath := filepath.Join(workflowDirectory, filepath.FromSlash(workflowName))
+	relative, err := filepath.Rel(workflowDirectory, workflowPath)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		return false, fmt.Errorf("invalid workflow path %q", workflow)
 	}
+	info, err := os.Stat(workflowPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("check workflow %q: %w", workflow, err)
+	}
+	return info.Mode().IsRegular(), nil
+}
+
+func remoteWorkflowExists(ctx context.Context, workflow, repository, workflowName string) (bool, error) {
 	endpoint := githubAPIBaseURL + "/repos/" + escapePath(repository) +
 		"/contents/.github/workflows/" + escapePath(workflowName)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)

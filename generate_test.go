@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -196,7 +197,7 @@ func TestRunHelp(t *testing.T) {
 	if err := runGenerator(context.Background(), []string{"-h"}, &stdout, &stderr); err != nil {
 		t.Fatalf("run help: %v", err)
 	}
-	if !strings.Contains(stderr.String(), "Usage: insmith [flags] OWNER/REPO") {
+	if !strings.Contains(stderr.String(), "Usage: insmith [flags] [OWNER/REPO]") {
 		t.Errorf("help output = %q", stderr.String())
 	}
 }
@@ -257,6 +258,87 @@ func TestRunEmptyWorkflowDisablesPinning(t *testing.T) {
 	if !strings.Contains(stdout.String(), "WORKFLOW=''") {
 		t.Errorf("empty workflow output = %q", stdout.String())
 	}
+}
+
+func TestRunLocalRepositoryUsesLocalWorkflow(t *testing.T) {
+	root := initLocalRepository(t, "git@github.com:owner/repo.git", "release-build.yaml")
+	t.Chdir(root)
+	var stdout, stderr bytes.Buffer
+	if err := Run(context.Background(), nil, &stdout, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"REPOSITORY='owner/repo'",
+		"WORKFLOW='owner/repo/.github/workflows/release-build.yaml'",
+	} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Errorf("local repository output does not contain %q", want)
+		}
+	}
+}
+
+func TestRunLocalRepositoryMissingDefaultWorkflowDisablesPinning(t *testing.T) {
+	root := initLocalRepository(t, "https://github.com/owner/repo.git")
+	t.Chdir(root)
+	var stdout, stderr bytes.Buffer
+	if err := Run(context.Background(), nil, &stdout, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout.String(), "WORKFLOW=''") {
+		t.Errorf("missing local default workflow output = %q", stdout.String())
+	}
+}
+
+func TestRunLocalRepositoryMissingExplicitWorkflowFails(t *testing.T) {
+	root := initLocalRepository(t, "ssh://git@github.com/owner/repo.git")
+	t.Chdir(root)
+	var stdout, stderr bytes.Buffer
+	err := Run(context.Background(), []string{"--workflow=missing.yaml"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), `workflow "owner/repo/.github/workflows/missing.yaml" does not exist`) {
+		t.Fatalf("Run() error = %v", err)
+	}
+}
+
+func TestGitHubRepositoryFromRemote(t *testing.T) {
+	for _, remote := range []string{
+		"git@github.com:owner/repo.git",
+		"https://github.com/owner/repo.git",
+		"ssh://git@github.com/owner/repo.git",
+		"git://github.com/owner/repo",
+	} {
+		t.Run(remote, func(t *testing.T) {
+			repository, err := githubRepositoryFromRemote(remote)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if repository != "owner/repo" {
+				t.Errorf("githubRepositoryFromRemote(%q) = %q", remote, repository)
+			}
+		})
+	}
+}
+
+func initLocalRepository(t *testing.T, remote string, workflows ...string) string {
+	t.Helper()
+	root := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q", root},
+		{"-C", root, "remote", "add", "origin", remote},
+	} {
+		if output, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, output)
+		}
+	}
+	workflowDirectory := filepath.Join(root, ".github", "workflows")
+	if err := os.MkdirAll(workflowDirectory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, workflow := range workflows {
+		if err := os.WriteFile(filepath.Join(workflowDirectory, workflow), []byte("name: test\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
 }
 
 func mockWorkflowAPI(t *testing.T, expectedPath string, status int) {
