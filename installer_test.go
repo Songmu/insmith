@@ -706,6 +706,18 @@ func TestGeneratedInstallerRejectsUnsafeArchives(t *testing.T) {
 			want:      "path traversal",
 		},
 		{
+			name:      "zip Windows path traversal",
+			extension: ".zip",
+			entries:   []archiveEntry{{name: `..\repo`, body: "binary"}},
+			want:      "Windows path separator",
+		},
+		{
+			name:      "zip drive-qualified path",
+			extension: ".zip",
+			entries:   []archiveEntry{{name: "C:/repo", body: "binary"}},
+			want:      "drive-qualified path",
+		},
+		{
 			name:      "zip symlink",
 			extension: ".zip",
 			entries: []archiveEntry{{

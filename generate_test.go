@@ -46,6 +46,8 @@ func TestGenerateDefaults(t *testing.T) {
 		"trap 'exit 1' HUP INT TERM",
 		`*[!A-Za-z0-9._+-]* | "")`,
 		"tar_names=$(tar -tzf \"$artifact\")",
+		`*\\*) fail "archive contains a Windows path separator: $member"`,
+		`[A-Za-z]:*) fail "archive contains a drive-qualified path: $member"`,
 		"h*) fail \"archive contains a hard link entry which is not supported\"",
 		"verify_checksum",
 		`install -d "$BINDIR"`,

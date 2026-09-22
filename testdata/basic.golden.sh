@@ -625,6 +625,15 @@ check_archive_member() {
 	esac
 }
 
+check_zip_member() {
+	member=$1
+	check_archive_member "$member"
+	case "$member" in
+		*\\*) fail "archive contains a Windows path separator: $member" ;;
+		[A-Za-z]:*) fail "archive contains a drive-qualified path: $member" ;;
+	esac
+}
+
 check_tar_types() {
 	while IFS= read -r line; do
 		case "$line" in
@@ -710,7 +719,7 @@ extract_artifact() {
 			zip_names=$(unzip -Z1 "$artifact") || fail "could not list $asset_name contents"
 			while IFS= read -r member; do
 				[ -n "$member" ] || continue
-				check_archive_member "$member"
+				check_zip_member "$member"
 			done <<-EOF
 			$zip_names
 			EOF
