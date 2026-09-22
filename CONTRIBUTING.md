@@ -4,6 +4,11 @@ This document collects information for people working on the `insmith`
 codebase itself, as opposed to people generating or using an installer script
 produced by it.
 
+## Contributor license
+
+By submitting a contribution, you agree to license it under the
+[MIT License](LICENSE).
+
 ## Development setup
 
 `insmith` is a Go module; see `go.mod` for the required Go version.
