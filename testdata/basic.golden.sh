@@ -580,19 +580,23 @@ verify_attestation() {
 }
 
 verify_artifact() {
+
 	if verify_attestation; then
 		:
 	else
 		status=$?
 		case "$status" in
 			2)
+
 				log_info "build provenance verification unavailable; falling back to SHA-256"
 				verify_checksum
 				;;
+
 			3) fail "could not resolve release tag $TAG to a commit" ;;
 			*) fail "attestation verification failed" ;;
 		esac
 	fi
+
 }
 
 check_archive_member() {

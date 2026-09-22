@@ -81,6 +81,10 @@ func TestGenerateGolden(t *testing.T) {
 }
 
 func TestGenerateVerificationSpecialization(t *testing.T) {
+	shell, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("sh is not available")
+	}
 	tests := []struct {
 		verification string
 		present      []string
@@ -129,7 +133,7 @@ func TestGenerateVerificationSpecialization(t *testing.T) {
 					t.Errorf("generated script unexpectedly contains %q", text)
 				}
 			}
-			cmd := exec.Command("/bin/sh", "-n")
+			cmd := exec.Command(shell, "-n")
 			cmd.Stdin = strings.NewReader(script)
 			if output, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("generated script is invalid: %v\n%s", err, output)
