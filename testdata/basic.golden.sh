@@ -459,7 +459,6 @@ WORKFLOW='Songmu/gitrail/.github/workflows/release-build.yaml'
 ASSET_PATTERN='{name}_{version}_{os}_{arch}'
 CHECKSUM_PATTERN='SHA256SUMS'
 
-
 log_prefix() {
 	printf '%s\n' "$REPOSITORY"
 }
