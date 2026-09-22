@@ -9,7 +9,7 @@ cat /dev/null <<EOF
 ------------------------------------------------------------------------
 Selected functions based on client9/shlib v2026.08.30 (commit 3593994).
 This excerpt includes the command, logging, platform, archive, download,
-GitHub Release helpers used by generated installers.
+GitHub Release, and SHA-256 helpers used by generated installers.
 Unselected functions and upstream explanatory comments are omitted.
 
 https://github.com/client9/shlib
@@ -531,8 +531,6 @@ verify_checksum() {
 	log_info "verified SHA-256 checksum for $asset_name"
 }
 
-
-
 attestation_capability() {
 	is_command gh || return 2
 	is_command git || return 2
@@ -582,8 +580,6 @@ verify_attestation() {
 	fi
 }
 
-
-
 verify_artifact() {
 	if verify_attestation; then
 		:
@@ -599,7 +595,6 @@ verify_artifact() {
 		esac
 	fi
 }
-
 
 check_archive_member() {
 	member=$1
@@ -799,9 +794,7 @@ main() {
 
 	log_info "found version: $TAG for $OS/$ARCH"
 	download_artifact
-
 	verify_artifact
-
 	extract_artifact
 	prepare_binaries
 	commit_installs

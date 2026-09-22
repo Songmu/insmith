@@ -75,11 +75,9 @@ line_count() {
 	hash_sha256_verify "$artifact" "$checksums" ||
 		fail "checksum verification failed for $asset_name"
 	log_info "verified SHA-256 checksum for $asset_name"
-}
-{{end}}
+}{{end}}
 
-{{if .AttestationVerification}}
-attestation_capability() {
+{{if .AttestationVerification}}attestation_capability() {
 	is_command gh || return 2
 	is_command git || return 2
 	is_command grep || return 2
@@ -126,35 +124,24 @@ verify_attestation() {
 			--source-digest "$commit" \
 			--signer-digest "$commit" || return 1
 	fi
-}
-{{end}}
+}{{end}}
 
-{{if or .ChecksumVerification .AttestationVerification}}
-verify_artifact() {
-	{{if .ChecksumVerification}}{{if .AttestationVerification}}if verify_attestation; then
+{{if or .ChecksumVerification .AttestationVerification}}verify_artifact() {
+	{{if .AttestationVerification}}if verify_attestation; then
 		:
 	else
 		status=$?
 		case "$status" in
-			2)
+			2){{if .ChecksumVerification}}
 				log_info "build provenance verification unavailable; falling back to SHA-256"
 				verify_checksum
-				;;
+				;;{{else}}
+				fail "GitHub attestation verification is unavailable" ;;{{end}}
 			3) fail "could not resolve release tag $TAG to a commit" ;;
 			*) fail "attestation verification failed" ;;
 		esac
-	fi{{else}}verify_checksum{{end}}{{else}}{{if .AttestationVerification}}if verify_attestation; then
-		:
-	else
-		status=$?
-		case "$status" in
-			2) fail "GitHub attestation verification is unavailable" ;;
-			3) fail "could not resolve release tag $TAG to a commit" ;;
-			*) fail "attestation verification failed" ;;
-		esac
-	fi{{end}}{{end}}
-}
-{{end}}
+	fi{{else}}verify_checksum{{end}}
+}{{end}}
 
 check_archive_member() {
 	member=$1
@@ -354,9 +341,7 @@ main() {
 
 	log_info "found version: $TAG for $OS/$ARCH"
 	download_artifact
-{{if or .ChecksumVerification .AttestationVerification}}
-	verify_artifact
-{{end}}
+{{if or .ChecksumVerification .AttestationVerification}}	verify_artifact{{end}}
 	extract_artifact
 	prepare_binaries
 	commit_installs

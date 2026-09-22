@@ -139,14 +139,14 @@ func generate(c config) (string, error) {
 		ChecksumVerification    bool
 		AttestationVerification bool
 	}{
-		shellQuote(c.repository),
-		shellQuote(c.name),
-		shellQuote(strings.Join(c.binaries, " ")),
-		shellQuote(c.workflow),
-		shellQuote(c.assetPattern),
-		shellQuote(c.checksumPattern),
-		c.verification == "checksum" || c.verification == "attestation-or-checksum",
-		c.verification == "attestation" || c.verification == "attestation-or-checksum",
+		Repository:              shellQuote(c.repository),
+		Name:                    shellQuote(c.name),
+		Binaries:                shellQuote(strings.Join(c.binaries, " ")),
+		Workflow:                shellQuote(c.workflow),
+		AssetPattern:            shellQuote(c.assetPattern),
+		ChecksumPattern:         shellQuote(c.checksumPattern),
+		ChecksumVerification:    c.verification == "checksum" || c.verification == "attestation-or-checksum",
+		AttestationVerification: c.verification == "attestation" || c.verification == "attestation-or-checksum",
 	}); err != nil {
 		return "", err
 	}

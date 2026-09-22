@@ -2,7 +2,7 @@ cat /dev/null <<EOF
 ------------------------------------------------------------------------
 Selected functions based on client9/shlib v2026.08.30 (commit 3593994).
 This excerpt includes the command, logging, platform, archive, download,
-GitHub Release helpers used by generated installers.
+GitHub Release{{if .ChecksumVerification}}, and SHA-256{{end}} helpers used by generated installers.
 Unselected functions and upstream explanatory comments are omitted.
 
 https://github.com/client9/shlib
