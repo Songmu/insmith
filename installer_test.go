@@ -788,7 +788,7 @@ func writeFakeGH(t *testing.T, dir string, verifyExit int, ghLog string) {
 	t.Helper()
 	finish := fmt.Sprintf("exit %d", verifyExit)
 	if ghLog != "" {
-		finish = fmt.Sprintf("printf '%%s\\n' \"$*\" > %q\nexit %d", ghLog, verifyExit)
+		finish = fmt.Sprintf("printf '%%s\\n' \"$*\" > %s\nexit %d", shellQuote(ghLog), verifyExit)
 	}
 	writeCommand(t, dir, "gh", fmt.Sprintf(`
 if [ "$1" = "--version" ]; then
