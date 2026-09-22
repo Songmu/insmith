@@ -171,6 +171,7 @@ func generate(c config) (string, error) {
 		ChecksumPattern         string
 		ChecksumVerification    bool
 		AttestationVerification bool
+		WorkflowPinning         bool
 	}{
 		Repository:              shellQuote(c.repository),
 		Name:                    shellQuote(c.name),
@@ -180,6 +181,7 @@ func generate(c config) (string, error) {
 		ChecksumPattern:         shellQuote(c.checksumPattern),
 		ChecksumVerification:    c.verification == verificationChecksum || c.verification == verificationAttestationOrChecksum,
 		AttestationVerification: c.verification == verificationAttestation || c.verification == verificationAttestationOrChecksum,
+		WorkflowPinning:         c.workflow != "" && (c.verification == verificationAttestation || c.verification == verificationAttestationOrChecksum),
 	}); err != nil {
 		return "", err
 	}

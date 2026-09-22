@@ -563,18 +563,11 @@ verify_attestation() {
 	commit=$(resolve_tag_commit) || return 3
 	[ -n "$commit" ] || return 3
 	log_info "verifying build provenance for $asset_name"
-	if [ -n "$WORKFLOW" ]; then
-		gh attestation verify "$artifact" \
-			--repo "$REPOSITORY" \
-			--source-digest "$commit" \
-			--signer-digest "$commit" \
-			--signer-workflow "$WORKFLOW" || return 1
-	else
-		gh attestation verify "$artifact" \
-			--repo "$REPOSITORY" \
-			--source-digest "$commit" \
-			--signer-digest "$commit" || return 1
-	fi
+	gh attestation verify "$artifact" \
+		--repo "$REPOSITORY" \
+		--source-digest "$commit" \
+		--signer-digest "$commit" \
+		--signer-workflow "$WORKFLOW" || return 1
 }
 
 verify_artifact() {

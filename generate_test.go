@@ -108,13 +108,13 @@ func TestGenerateVerificationSpecialization(t *testing.T) {
 		},
 		{
 			verification: "attestation",
-			present:      []string{"WORKFLOW=", "verify_attestation", "attestation_capability"},
-			absent:       []string{"VERIFICATION=", "CHECKSUM_PATTERN=", "verify_checksum", "hash_sha256"},
+			present:      []string{"verify_attestation", "attestation_capability"},
+			absent:       []string{"VERIFICATION=", "CHECKSUM_PATTERN=", "WORKFLOW=", "--signer-workflow", "verify_checksum", "hash_sha256"},
 		},
 		{
 			verification: "attestation-or-checksum",
-			present:      []string{"WORKFLOW=", "CHECKSUM_PATTERN=", "verify_checksum", "verify_attestation", "hash_sha256"},
-			absent:       []string{"VERIFICATION="},
+			present:      []string{"CHECKSUM_PATTERN=", "verify_checksum", "verify_attestation", "hash_sha256"},
+			absent:       []string{"VERIFICATION=", "WORKFLOW=", "--signer-workflow"},
 		},
 	}
 	for _, tt := range tests {
@@ -236,8 +236,10 @@ func TestRunMissingDefaultWorkflowDisablesPinning(t *testing.T) {
 	if err := Run(context.Background(), []string{"owner/repo"}, &stdout, &stderr); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout.String(), "WORKFLOW=''") {
-		t.Errorf("missing default workflow output = %q", stdout.String())
+	for _, unwanted := range []string{"WORKFLOW=", "--signer-workflow", `[ -n "$WORKFLOW" ]`} {
+		if strings.Contains(stdout.String(), unwanted) {
+			t.Errorf("missing default workflow output unexpectedly contains %q", unwanted)
+		}
 	}
 }
 
@@ -255,8 +257,10 @@ func TestRunEmptyWorkflowDisablesPinning(t *testing.T) {
 	if err := Run(context.Background(), []string{"--workflow=", "owner/repo"}, &stdout, &stderr); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout.String(), "WORKFLOW=''") {
-		t.Errorf("empty workflow output = %q", stdout.String())
+	for _, unwanted := range []string{"WORKFLOW=", "--signer-workflow", `[ -n "$WORKFLOW" ]`} {
+		if strings.Contains(stdout.String(), unwanted) {
+			t.Errorf("empty workflow output unexpectedly contains %q", unwanted)
+		}
 	}
 }
 
@@ -284,8 +288,10 @@ func TestRunLocalRepositoryMissingDefaultWorkflowDisablesPinning(t *testing.T) {
 	if err := Run(context.Background(), nil, &stdout, &stderr); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout.String(), "WORKFLOW=''") {
-		t.Errorf("missing local default workflow output = %q", stdout.String())
+	for _, unwanted := range []string{"WORKFLOW=", "--signer-workflow", `[ -n "$WORKFLOW" ]`} {
+		if strings.Contains(stdout.String(), unwanted) {
+			t.Errorf("missing local default workflow output unexpectedly contains %q", unwanted)
+		}
 	}
 }
 
