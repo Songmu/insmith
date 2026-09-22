@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -211,6 +212,65 @@ func TestRunGenerate(t *testing.T) {
 	if !strings.Contains(stdout.String(), "NAME='tools'") ||
 		!strings.Contains(stdout.String(), "BINARIES='foo bar'") {
 		t.Errorf("Run(%q) output = %q", args, stdout.String())
+	}
+}
+
+func TestRunWrite(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	args := []string{"-w", "--verification=none", "owner/repo"}
+	var stdout, stderr bytes.Buffer
+	if err := Run(context.Background(), args, &stdout, &stderr); err != nil {
+		t.Fatalf("Run(%q): %v", args, err)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("Run(%q) stdout = %q, want empty", args, stdout.String())
+	}
+	got, err := os.ReadFile("install.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), "REPOSITORY='owner/repo'") {
+		t.Errorf("install.sh does not contain repository: %q", got)
+	}
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat("install.sh")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, want := info.Mode().Perm(), os.FileMode(0o755); got != want {
+			t.Errorf("install.sh mode = %o, want %o", got, want)
+		}
+	}
+}
+
+func TestRunWriteOverwritesInstallScript(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	if err := os.WriteFile("install.sh", []byte("old contents"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(context.Background(), []string{"-w", "--verification=none", "owner/repo"}, &stdout, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile("install.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(got), "old contents") {
+		t.Errorf("install.sh was not overwritten: %q", got)
+	}
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat("install.sh")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, want := info.Mode().Perm(), os.FileMode(0o755); got != want {
+			t.Errorf("install.sh mode = %o, want %o", got, want)
+		}
 	}
 }
 

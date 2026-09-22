@@ -70,6 +70,7 @@ func runGenerator(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	checksumPattern := flags.String("checksum-pattern", "SHA256SUMS", "checksum asset name pattern")
 	verification := flags.String("verification", verificationAttestationOrChecksum, "verification policy: attestation, attestation-or-checksum, checksum, or none")
 	showVersion := flags.Bool("version", false, "display version")
+	write := flags.Bool("w", false, "write to install.sh instead of standard output")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
@@ -113,6 +114,12 @@ func runGenerator(ctx context.Context, args []string, stdout, stderr io.Writer) 
 	})
 	if err != nil {
 		return err
+	}
+	if *write {
+		if err := os.WriteFile("install.sh", []byte(script), 0o755); err != nil {
+			return err
+		}
+		return os.Chmod("install.sh", 0o755)
 	}
 	_, err = io.WriteString(stdout, script)
 	return err
