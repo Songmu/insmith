@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.0.4](https://github.com/Songmu/insmith/compare/v0.0.3...v0.0.4) - 2026-09-22
+
+- Handle missing default workflow by @Songmu in https://github.com/Songmu/insmith/pull/19
+- Document generator option defaults by @Songmu in https://github.com/Songmu/insmith/pull/21
+- Optimize installers without workflow pinning by @Songmu in https://github.com/Songmu/insmith/pull/22
+- Add -w option to write install.sh by @Songmu in https://github.com/Songmu/insmith/pull/23
+
 ## [v0.0.3](https://github.com/Songmu/insmith/compare/v0.0.2...v0.0.3) - 2026-09-22
 
 - docs: improve public repository guidance by @Songmu with @Copilot in https://github.com/Songmu/insmith/pull/17
