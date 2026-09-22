@@ -214,6 +214,47 @@ func TestRunGenerate(t *testing.T) {
 	}
 }
 
+func TestRunWrite(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	args := []string{"-w", "--verification=none", "owner/repo"}
+	var stdout, stderr bytes.Buffer
+	if err := Run(context.Background(), args, &stdout, &stderr); err != nil {
+		t.Fatalf("Run(%q): %v", args, err)
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("Run(%q) stdout = %q, want empty", args, stdout.String())
+	}
+	got, err := os.ReadFile("install.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(got), "REPOSITORY='owner/repo'") {
+		t.Errorf("install.sh does not contain repository: %q", got)
+	}
+}
+
+func TestRunWriteOverwritesInstallScript(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	if err := os.WriteFile("install.sh", []byte("old contents"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(context.Background(), []string{"-w", "--verification=none", "owner/repo"}, &stdout, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile("install.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(got), "old contents") {
+		t.Errorf("install.sh was not overwritten: %q", got)
+	}
+}
+
 func TestRunVerificationDefaults(t *testing.T) {
 	mockWorkflowAPI(t, "/repos/owner/repo/contents/.github/workflows/release-build.yaml", http.StatusOK)
 	var stdout, stderr bytes.Buffer
