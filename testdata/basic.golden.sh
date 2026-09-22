@@ -384,7 +384,6 @@ github_release() {
 
   echo "$_shlib_version"
 }
-
 hash_sha256() {
   if [ -z "${1-}" ]; then
     set --
@@ -445,7 +444,6 @@ hash_sha256_verify() {
     return 1
   fi
 }
-
 cat /dev/null <<EOF
 ------------------------------------------------------------------------
 End of selected shlib functions based on client9/shlib v2026.08.30
@@ -580,23 +578,19 @@ verify_attestation() {
 }
 
 verify_artifact() {
-
 	if verify_attestation; then
 		:
 	else
 		status=$?
 		case "$status" in
 			2)
-
 				log_info "build provenance verification unavailable; falling back to SHA-256"
 				verify_checksum
 				;;
-
 			3) fail "could not resolve release tag $TAG to a commit" ;;
 			*) fail "attestation verification failed" ;;
 		esac
 	fi
-
 }
 
 check_archive_member() {

@@ -126,28 +126,22 @@ verify_attestation() {
 }{{end}}
 
 {{if or .ChecksumVerification .AttestationVerification}}verify_artifact() {
-{{if .AttestationVerification}}
-	if verify_attestation; then
+{{if .AttestationVerification}}	if verify_attestation; then
 		:
 	else
 		status=$?
 		case "$status" in
 			2)
-{{if .ChecksumVerification}}
-				log_info "build provenance verification unavailable; falling back to SHA-256"
+{{if .ChecksumVerification}}				log_info "build provenance verification unavailable; falling back to SHA-256"
 				verify_checksum
 				;;
-{{else}}
-				fail "GitHub attestation verification is unavailable" ;;
-{{end}}
-			3) fail "could not resolve release tag $TAG to a commit" ;;
+{{else}}				fail "GitHub attestation verification is unavailable" ;;
+{{end}}			3) fail "could not resolve release tag $TAG to a commit" ;;
 			*) fail "attestation verification failed" ;;
 		esac
 	fi
-{{else}}
-	verify_checksum
-{{end}}
-}{{end}}
+{{else}}	verify_checksum
+{{end}}}{{end}}
 
 check_archive_member() {
 	member=$1

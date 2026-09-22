@@ -376,8 +376,7 @@ github_release() {
   esac
 
   echo "$_shlib_version"
-}
-{{if .ChecksumVerification}}
+}{{if .ChecksumVerification}}
 hash_sha256() {
   if [ -z "${1-}" ]; then
     set --
@@ -437,8 +436,7 @@ hash_sha256_verify() {
     log_err "hash_sha256_verify checksum for '$_shlib_target' did not verify ${_shlib_want} vs $_shlib_got"
     return 1
   fi
-}
-{{end}}
+}{{end}}
 cat /dev/null <<EOF
 ------------------------------------------------------------------------
 End of selected shlib functions based on client9/shlib v2026.08.30
