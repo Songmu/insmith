@@ -3,7 +3,7 @@ NAME={{.Name}}
 BINARIES={{.Binaries}}
 WORKFLOW={{.Workflow}}
 ASSET_PATTERN={{.AssetPattern}}
-CHECKSUM_PATTERN={{.ChecksumPattern}}
+CHECKSUM_FILE={{.ChecksumFile}}
 VERIFICATION={{.Verification}}
 
 log_prefix() {
@@ -67,7 +67,7 @@ line_count() {
 }
 
 verify_checksum() {
-	checksum_name=$(printf '%s' "$CHECKSUM_PATTERN" |
+	checksum_name=$(printf '%s' "$CHECKSUM_FILE" |
 		sed -e "s/{version}/$TAG/g" -e "s/{name}/$NAME/g" -e "s/{os}/$OS/g" -e "s/{arch}/$ARCH/g")
 	checksum_url="$GITHUB_DOWNLOAD/$TAG/$checksum_name"
 	checksums="$tmpdir/$checksum_name"

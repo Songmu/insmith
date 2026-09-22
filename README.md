@@ -71,15 +71,17 @@ mode; when unavailable, the installer verifies the release checksum.
 --binary NAME  # repeatable; defaults to --name
 --workflow PATH  # default: release-build.yaml; empty disables workflow pinning
 --asset-pattern PATTERN
---checksum-pattern PATTERN  # default: SHA256SUMS
+--checksum-file NAME  # default: SHA256SUMS
 --verification attestation|attestation-or-checksum|checksum|none
 ```
 
 The package name defaults to the repository name and is available to asset
 patterns as `{name}`. Each `--binary` identifies an executable inside the
 selected archive; when omitted, the package name is installed as a single
-binary. Asset and checksum patterns may use `{name}`, `{version}`, `{os}`, and
-`{arch}`. A raw, unarchived release asset can install only one binary.
+binary. The asset pattern and the checksum file name may use `{name}`,
+`{version}`, `{os}`, and `{arch}`; these placeholders are substituted literally
+and no globbing is performed. A raw, unarchived release asset can install only
+one binary.
 
 The default verification mode is `attestation-or-checksum`: an unavailable
 attestation capability (including a missing `gh`/`git`, `gh` older than 2.93,

@@ -90,9 +90,9 @@ func TestGeneratedInstallerFormats(t *testing.T) {
 			env = append(env, "FAKE_UNAME_S="+tt.goos, "FAKE_UNAME_M="+tt.arch)
 
 			result := runGeneratedInstaller(t, config{
-				repository:      "owner/repo",
-				checksumPattern: "SHA256SUMS",
-				verification:    "attestation-or-checksum",
+				repository:   "owner/repo",
+				checksumFile: "SHA256SUMS",
+				verification: "attestation-or-checksum",
 			}, env, args...)
 			if result.err != nil {
 				t.Fatalf("installer failed: %v\n%s", result.err, result.output)
@@ -163,10 +163,10 @@ func TestGeneratedInstallerFallsBackWithoutGH(t *testing.T) {
 		}
 	}
 	result := runGeneratedInstaller(t, config{
-		repository:      "owner/repo",
-		workflow:        "release-build.yaml",
-		checksumPattern: "SHA256SUMS",
-		verification:    "attestation-or-checksum",
+		repository:   "owner/repo",
+		workflow:     "release-build.yaml",
+		checksumFile: "SHA256SUMS",
+		verification: "attestation-or-checksum",
 	}, env, "-b", filepath.Join(t.TempDir(), "bin"), version)
 	if result.err != nil {
 		t.Fatalf("installer failed: %v\n%s", result.err, result.output)
@@ -411,11 +411,11 @@ func TestGeneratedInstallerMultipleBinaries(t *testing.T) {
 			env = append(env, "FAKE_UNAME_S="+tt.unameOS, "FAKE_UNAME_M="+tt.arch)
 			bindir := filepath.Join(t.TempDir(), "bin")
 			result := runGeneratedInstaller(t, config{
-				repository:      "owner/repo",
-				name:            "tools",
-				binaries:        []string{"foo", "bar"},
-				checksumPattern: "SHA256SUMS",
-				verification:    "checksum",
+				repository:   "owner/repo",
+				name:         "tools",
+				binaries:     []string{"foo", "bar"},
+				checksumFile: "SHA256SUMS",
+				verification: "checksum",
 			}, env, "-b", bindir, version)
 			if result.err != nil {
 				t.Fatalf("installer failed: %v\n%s", result.err, result.output)
@@ -512,9 +512,9 @@ func TestGeneratedInstallerDoesNotDowngradeFailures(t *testing.T) {
 			writeFakeGH(t, fakeBin, tt.verifyExit, "")
 
 			result := runGeneratedInstaller(t, config{
-				repository:      "owner/repo",
-				checksumPattern: "SHA256SUMS",
-				verification:    "attestation-or-checksum",
+				repository:   "owner/repo",
+				checksumFile: "SHA256SUMS",
+				verification: "attestation-or-checksum",
 			}, env, "-b", filepath.Join(t.TempDir(), "bin"), version)
 			if result.err == nil || !strings.Contains(result.output, tt.want) {
 				t.Fatalf("result = %v\n%s", result.err, result.output)
@@ -555,9 +555,9 @@ func TestGeneratedInstallerRejectsInvalidChecksums(t *testing.T) {
 			env, _ := setupArtifact(t, version, assetName, "binary", 0o755)
 			writeFile(t, envValue(env, "CHECKSUMS"), tt.checksums, 0o644)
 			result := runGeneratedInstaller(t, config{
-				repository:      "owner/repo",
-				checksumPattern: "SHA256SUMS",
-				verification:    "checksum",
+				repository:   "owner/repo",
+				checksumFile: "SHA256SUMS",
+				verification: "checksum",
 			}, env, "-b", filepath.Join(t.TempDir(), "bin"), version)
 			if result.err == nil || !strings.Contains(result.output, tt.want) {
 				t.Fatalf("result = %v\n%s", result.err, result.output)

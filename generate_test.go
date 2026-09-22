@@ -9,7 +9,7 @@ import (
 )
 
 func TestGenerateDefaults(t *testing.T) {
-	script, err := generate(config{repository: "Songmu/gitrail", workflow: "release-build.yaml", checksumPattern: "SHA256SUMS", verification: "attestation-or-checksum"})
+	script, err := generate(config{repository: "Songmu/gitrail", workflow: "release-build.yaml", checksumFile: "SHA256SUMS", verification: "attestation-or-checksum"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,10 +62,10 @@ func TestGenerateDefaults(t *testing.T) {
 
 func TestGenerateGolden(t *testing.T) {
 	script, err := generate(config{
-		repository:      "Songmu/gitrail",
-		workflow:        "release-build.yaml",
-		checksumPattern: "SHA256SUMS",
-		verification:    "attestation-or-checksum",
+		repository:   "Songmu/gitrail",
+		workflow:     "release-build.yaml",
+		checksumFile: "SHA256SUMS",
+		verification: "attestation-or-checksum",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +90,7 @@ func TestGenerateValidation(t *testing.T) {
 		{"unsafe name", config{repository: "owner/repo", name: "bad/name", verification: "none"}},
 		{"unsafe binary name", config{repository: "owner/repo", binaries: []string{"good", "bad/name"}, verification: "none"}},
 		{"duplicate binary names", config{repository: "owner/repo", binaries: []string{"duplicate", "duplicate"}, verification: "none"}},
-		{"unsafe checksum pattern", config{repository: "owner/repo", checksumPattern: "bad/path", verification: "checksum"}},
+		{"unsafe checksum file name", config{repository: "owner/repo", checksumFile: "bad/path", verification: "checksum"}},
 	}
 	for _, pattern := range []string{"{unknown}", "{binary}", "{name", "name}"} {
 		tests = append(tests, testCase{
@@ -154,7 +154,7 @@ func TestRunVerificationDefaults(t *testing.T) {
 	}
 	for _, want := range []string{
 		"WORKFLOW='owner/repo/.github/workflows/release-build.yaml'",
-		"CHECKSUM_PATTERN='SHA256SUMS'",
+		"CHECKSUM_FILE='SHA256SUMS'",
 		"VERIFICATION='attestation-or-checksum'",
 	} {
 		if !strings.Contains(stdout.String(), want) {

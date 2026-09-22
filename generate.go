@@ -12,13 +12,13 @@ import (
 )
 
 type config struct {
-	repository      string
-	name            string
-	binaries        []string
-	workflow        string
-	assetPattern    string
-	checksumPattern string
-	verification    string
+	repository   string
+	name         string
+	binaries     []string
+	workflow     string
+	assetPattern string
+	checksumFile string
+	verification string
 }
 
 type stringListFlag []string
@@ -45,7 +45,7 @@ func runGenerator(args []string, stdout, stderr io.Writer) error {
 	flags.Var(&binaries, "binary", "binary to install (repeatable; defaults to name)")
 	workflow := flags.String("workflow", "release-build.yaml", "release workflow path for attestation verification (empty disables workflow pinning)")
 	assetPattern := flags.String("asset-pattern", "", "asset name pattern using {name}, {version}, {os}, and {arch}")
-	checksumPattern := flags.String("checksum-pattern", "SHA256SUMS", "checksum asset name pattern")
+	checksumFile := flags.String("checksum-file", "SHA256SUMS", "checksum file name, which may use {name}, {version}, {os}, and {arch}")
 	verification := flags.String("verification", "attestation-or-checksum", "verification policy: attestation, attestation-or-checksum, checksum, or none")
 	showVersion := flags.Bool("version", false, "display version")
 	if err := flags.Parse(args); err != nil {
@@ -63,13 +63,13 @@ func runGenerator(args []string, stdout, stderr io.Writer) error {
 	}
 
 	script, err := generate(config{
-		repository:      flags.Arg(0),
-		name:            *name,
-		binaries:        binaries,
-		workflow:        *workflow,
-		assetPattern:    *assetPattern,
-		checksumPattern: *checksumPattern,
-		verification:    *verification,
+		repository:   flags.Arg(0),
+		name:         *name,
+		binaries:     binaries,
+		workflow:     *workflow,
+		assetPattern: *assetPattern,
+		checksumFile: *checksumFile,
+		verification: *verification,
 	})
 	if err != nil {
 		return err
@@ -109,8 +109,8 @@ func generate(c config) (string, error) {
 	if !safePattern(c.assetPattern) {
 		return "", fmt.Errorf("asset pattern contains unsupported characters")
 	}
-	if c.checksumPattern != "" && !safePattern(c.checksumPattern) {
-		return "", fmt.Errorf("checksum pattern contains unsupported characters")
+	if c.checksumFile != "" && !safePattern(c.checksumFile) {
+		return "", fmt.Errorf("checksum file name contains unsupported characters")
 	}
 	if c.workflow != "" && !strings.Contains(c.workflow, "/.github/workflows/") {
 		c.workflow = strings.TrimPrefix(c.workflow, "/")
@@ -124,26 +124,26 @@ func generate(c config) (string, error) {
 	default:
 		return "", fmt.Errorf("unknown verification policy %q", c.verification)
 	}
-	if c.checksumPattern == "" && c.verification != "none" && c.verification != "attestation" {
-		return "", fmt.Errorf("checksum pattern must not be empty when checksum verification is enabled")
+	if c.checksumFile == "" && c.verification != "none" && c.verification != "attestation" {
+		return "", fmt.Errorf("checksum file name must not be empty when checksum verification is enabled")
 	}
 
 	var output bytes.Buffer
 	if err := scriptTemplate.Execute(&output, struct {
-		Repository      string
-		Name            string
-		Binaries        string
-		Workflow        string
-		AssetPattern    string
-		ChecksumPattern string
-		Verification    string
+		Repository   string
+		Name         string
+		Binaries     string
+		Workflow     string
+		AssetPattern string
+		ChecksumFile string
+		Verification string
 	}{
 		shellQuote(c.repository),
 		shellQuote(c.name),
 		shellQuote(strings.Join(c.binaries, " ")),
 		shellQuote(c.workflow),
 		shellQuote(c.assetPattern),
-		shellQuote(c.checksumPattern),
+		shellQuote(c.checksumFile),
 		shellQuote(c.verification),
 	}); err != nil {
 		return "", err

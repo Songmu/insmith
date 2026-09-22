@@ -455,7 +455,7 @@ NAME='gitrail'
 BINARIES='gitrail'
 WORKFLOW='Songmu/gitrail/.github/workflows/release-build.yaml'
 ASSET_PATTERN='{name}_{version}_{os}_{arch}'
-CHECKSUM_PATTERN='SHA256SUMS'
+CHECKSUM_FILE='SHA256SUMS'
 VERIFICATION='attestation-or-checksum'
 
 log_prefix() {
@@ -519,7 +519,7 @@ line_count() {
 }
 
 verify_checksum() {
-	checksum_name=$(printf '%s' "$CHECKSUM_PATTERN" |
+	checksum_name=$(printf '%s' "$CHECKSUM_FILE" |
 		sed -e "s/{version}/$TAG/g" -e "s/{name}/$NAME/g" -e "s/{os}/$OS/g" -e "s/{arch}/$ARCH/g")
 	checksum_url="$GITHUB_DOWNLOAD/$TAG/$checksum_name"
 	checksums="$tmpdir/$checksum_name"
