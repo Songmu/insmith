@@ -99,8 +99,6 @@ commit constraints remain enabled.
 insmith [flags] OWNER/REPO
 ```
 
-## Description
-
 ## Installation
 
 ```console
