@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.0.2](https://github.com/Songmu/insmith/compare/v0.0.1...v0.0.2) - 2026-09-22
+
+- Fix release workflow dispatch without checkout by @Songmu with @Copilot in https://github.com/Songmu/insmith/pull/15
+
 ## [v0.0.1](https://github.com/Songmu/insmith/commits/v0.0.1) - 2026-09-22
 
 - Bump reviewdog/action-actionlint from 1.72.0 to 1.76.0 by @dependabot[bot] in https://github.com/Songmu/insmith/pull/6
