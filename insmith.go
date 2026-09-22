@@ -12,7 +12,7 @@ const cmdName = "insmith"
 // Run the insmith
 func Run(ctx context.Context, argv []string, outStream, errStream io.Writer) error {
 	log.SetOutput(errStream)
-	return runGenerator(argv, outStream, errStream)
+	return runGenerator(ctx, argv, outStream, errStream)
 }
 
 func printVersion(out io.Writer) error {

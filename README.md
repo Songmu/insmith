@@ -89,9 +89,11 @@ aborts installation without downgrading to checksums.
 
 By default, provenance is also pinned to
 `OWNER/REPO/.github/workflows/release-build.yaml`, matching gitrail. Use
-`--workflow PATH` for a differently named release workflow. `--workflow=`
-omits only the workflow constraint; repository, source commit, and signer
-commit constraints remain enabled.
+`--workflow PATH` for a differently named release workflow. If the default
+workflow does not exist, workflow pinning is omitted. An explicitly specified
+workflow must exist or generation fails. `--workflow=` omits only the workflow
+constraint; repository, source commit, and signer commit constraints remain
+enabled.
 
 ## Synopsis
 

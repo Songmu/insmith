@@ -3,6 +3,9 @@ package insmith
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"strings"
@@ -190,7 +193,7 @@ func TestShellQuote(t *testing.T) {
 
 func TestRunHelp(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if err := runGenerator([]string{"-h"}, &stdout, &stderr); err != nil {
+	if err := runGenerator(context.Background(), []string{"-h"}, &stdout, &stderr); err != nil {
 		t.Fatalf("run help: %v", err)
 	}
 	if !strings.Contains(stderr.String(), "Usage: insmith [flags] OWNER/REPO") {
@@ -211,6 +214,7 @@ func TestRunGenerate(t *testing.T) {
 }
 
 func TestRunVerificationDefaults(t *testing.T) {
+	mockWorkflowAPI(t, "/repos/owner/repo/contents/.github/workflows/release-build.yaml", http.StatusOK)
 	var stdout, stderr bytes.Buffer
 	if err := Run(context.Background(), []string{"owner/repo"}, &stdout, &stderr); err != nil {
 		t.Fatal(err)
@@ -225,6 +229,26 @@ func TestRunVerificationDefaults(t *testing.T) {
 	}
 }
 
+func TestRunMissingDefaultWorkflowDisablesPinning(t *testing.T) {
+	mockWorkflowAPI(t, "/repos/owner/repo/contents/.github/workflows/release-build.yaml", http.StatusNotFound)
+	var stdout, stderr bytes.Buffer
+	if err := Run(context.Background(), []string{"owner/repo"}, &stdout, &stderr); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout.String(), "WORKFLOW=''") {
+		t.Errorf("missing default workflow output = %q", stdout.String())
+	}
+}
+
+func TestRunMissingExplicitWorkflowFails(t *testing.T) {
+	mockWorkflowAPI(t, "/repos/owner/repo/contents/.github/workflows/release.yaml", http.StatusNotFound)
+	var stdout, stderr bytes.Buffer
+	err := Run(context.Background(), []string{"--workflow=release.yaml", "owner/repo"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), `workflow "owner/repo/.github/workflows/release.yaml" does not exist`) {
+		t.Fatalf("Run() error = %v", err)
+	}
+}
+
 func TestRunEmptyWorkflowDisablesPinning(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	if err := Run(context.Background(), []string{"--workflow=", "owner/repo"}, &stdout, &stderr); err != nil {
@@ -233,6 +257,23 @@ func TestRunEmptyWorkflowDisablesPinning(t *testing.T) {
 	if !strings.Contains(stdout.String(), "WORKFLOW=''") {
 		t.Errorf("empty workflow output = %q", stdout.String())
 	}
+}
+
+func mockWorkflowAPI(t *testing.T, expectedPath string, status int) {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != expectedPath {
+			t.Errorf("workflow API path = %q, want %q", r.URL.Path, expectedPath)
+		}
+		w.WriteHeader(status)
+		_, _ = fmt.Fprintln(w, "{}")
+	}))
+	t.Cleanup(server.Close)
+	oldBaseURL := githubAPIBaseURL
+	githubAPIBaseURL = server.URL
+	t.Cleanup(func() {
+		githubAPIBaseURL = oldBaseURL
+	})
 }
 
 func TestRunRequiresFlagsBeforeRepository(t *testing.T) {

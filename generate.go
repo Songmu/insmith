@@ -2,13 +2,18 @@ package insmith
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
+	"os"
 	"strings"
 	"text/template"
+	"time"
 )
 
 type config struct {
@@ -28,6 +33,9 @@ const (
 	verificationAttestationOrChecksum = "attestation-or-checksum"
 )
 
+var githubAPIBaseURL = "https://api.github.com"
+var workflowHTTPClient = &http.Client{Timeout: 10 * time.Second}
+
 type stringListFlag []string
 
 func (f *stringListFlag) String() string {
@@ -39,7 +47,7 @@ func (f *stringListFlag) Set(value string) error {
 	return nil
 }
 
-func runGenerator(args []string, stdout, stderr io.Writer) error {
+func runGenerator(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("insmith", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Usage = func() {
@@ -68,12 +76,30 @@ func runGenerator(args []string, stdout, stderr io.Writer) error {
 		flags.Usage()
 		return errors.New("exactly one OWNER/REPO argument is required; flags must precede it")
 	}
+	if err := validateRepository(flags.Arg(0)); err != nil {
+		return err
+	}
+
+	workflowExplicit := false
+	flags.Visit(func(f *flag.Flag) {
+		if f.Name == "workflow" {
+			workflowExplicit = true
+		}
+	})
+	resolvedWorkflow := *workflow
+	if workflowExplicit || *verification == verificationAttestation || *verification == verificationAttestationOrChecksum {
+		var err error
+		resolvedWorkflow, err = resolveWorkflow(ctx, flags.Arg(0), resolvedWorkflow, workflowExplicit)
+		if err != nil {
+			return err
+		}
+	}
 
 	script, err := generate(config{
 		repository:      flags.Arg(0),
 		name:            *name,
 		binaries:        binaries,
-		workflow:        *workflow,
+		workflow:        resolvedWorkflow,
 		assetPattern:    *assetPattern,
 		checksumPattern: *checksumPattern,
 		verification:    *verification,
@@ -86,11 +112,10 @@ func runGenerator(args []string, stdout, stderr io.Writer) error {
 }
 
 func generate(c config) (string, error) {
-	parts := strings.Split(c.repository, "/")
-	if len(parts) != 2 || !safeFilename(parts[0]) || !safeFilename(parts[1]) ||
-		parts[0] == "." || parts[0] == ".." || parts[1] == "." || parts[1] == ".." {
-		return "", fmt.Errorf("repository must be in OWNER/REPO form")
+	if err := validateRepository(c.repository); err != nil {
+		return "", err
 	}
+	parts := strings.Split(c.repository, "/")
 	if c.name == "" {
 		c.name = parts[1]
 	}
@@ -119,13 +144,7 @@ func generate(c config) (string, error) {
 	if c.checksumPattern != "" && !safePattern(c.checksumPattern) {
 		return "", fmt.Errorf("checksum pattern contains unsupported characters")
 	}
-	if c.workflow != "" && !strings.Contains(c.workflow, "/.github/workflows/") {
-		c.workflow = strings.TrimPrefix(c.workflow, "/")
-		if !strings.HasPrefix(c.workflow, ".github/workflows/") {
-			c.workflow = ".github/workflows/" + c.workflow
-		}
-		c.workflow = c.repository + "/" + c.workflow
-	}
+	c.workflow = qualifyWorkflow(c.repository, c.workflow)
 	switch c.verification {
 	case verificationAttestation, verificationAttestationOrChecksum, verificationChecksum, verificationNone:
 	default:
@@ -158,6 +177,89 @@ func generate(c config) (string, error) {
 		return "", err
 	}
 	return output.String(), nil
+}
+
+func validateRepository(repository string) error {
+	parts := strings.Split(repository, "/")
+	if len(parts) != 2 || !safeFilename(parts[0]) || !safeFilename(parts[1]) ||
+		parts[0] == "." || parts[0] == ".." || parts[1] == "." || parts[1] == ".." {
+		return fmt.Errorf("repository must be in OWNER/REPO form")
+	}
+	return nil
+}
+
+func resolveWorkflow(ctx context.Context, repository, workflow string, explicit bool) (string, error) {
+	workflow = qualifyWorkflow(repository, workflow)
+	if workflow == "" {
+		return "", nil
+	}
+	exists, err := workflowExists(ctx, workflow)
+	if err != nil {
+		return "", err
+	}
+	if exists {
+		return workflow, nil
+	}
+	if explicit {
+		return "", fmt.Errorf("workflow %q does not exist", workflow)
+	}
+	return "", nil
+}
+
+func qualifyWorkflow(repository, workflow string) string {
+	if workflow == "" || strings.Contains(workflow, "/.github/workflows/") {
+		return workflow
+	}
+	workflow = strings.TrimPrefix(workflow, "/")
+	if !strings.HasPrefix(workflow, ".github/workflows/") {
+		workflow = ".github/workflows/" + workflow
+	}
+	return repository + "/" + workflow
+}
+
+func workflowExists(ctx context.Context, workflow string) (bool, error) {
+	repository, workflowName, ok := strings.Cut(workflow, "/.github/workflows/")
+	if !ok || repository == "" || workflowName == "" {
+		return false, fmt.Errorf("invalid workflow path %q", workflow)
+	}
+	endpoint := githubAPIBaseURL + "/repos/" + escapePath(repository) +
+		"/contents/.github/workflows/" + escapePath(workflowName)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return false, fmt.Errorf("check workflow %q: %w", workflow, err)
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "insmith")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	token := os.Getenv("GH_TOKEN")
+	if token == "" {
+		token = os.Getenv("GITHUB_TOKEN")
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := workflowHTTPClient.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("check workflow %q: %w", workflow, err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	switch {
+	case resp.StatusCode == http.StatusNotFound:
+		return false, nil
+	case resp.StatusCode >= 200 && resp.StatusCode < 300:
+		return true, nil
+	default:
+		return false, fmt.Errorf("check workflow %q: GitHub API returned %s", workflow, resp.Status)
+	}
+}
+
+func escapePath(value string) string {
+	parts := strings.Split(value, "/")
+	for i, part := range parts {
+		parts[i] = url.PathEscape(part)
+	}
+	return strings.Join(parts, "/")
 }
 
 func shellQuote(s string) string {
