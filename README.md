@@ -20,6 +20,14 @@ verify its provenance with GitHub Artifact Attestations or SHA-256 checksums.
 Generate an installer for a conventional GoReleaser-style release:
 
 ```sh
+cd path/to/local/repository
+go run github.com/Songmu/insmith/cmd/insmith@latest > install.sh
+chmod +x install.sh
+```
+
+The repository can also be specified explicitly:
+
+```sh
 go run ./cmd/insmith --workflow release-build.yaml Songmu/gitrail > install.sh
 chmod +x install.sh
 ```
@@ -47,9 +55,12 @@ BINDIR="$HOME/bin" ./install.sh
 ./install.sh -x -b "$HOME/bin" v1.2.3
 ```
 
-The default installation directory is `./bin`. Generator flags must precede
-the single `OWNER/REPO` argument. Generated installers accept `-d` for shlib
-debug logging and `-x` for the shell's command execution trace.
+When `OWNER/REPO` is omitted, insmith resolves it from the local Git
+repository's `origin` remote. Workflow existence is then checked against the
+local worktree for that repository. The default installation directory is
+`./bin`. Generator flags must precede the optional `OWNER/REPO` argument.
+Generated installers accept `-d` for shlib debug logging and `-x` for the
+shell's command execution trace.
 
 When both archive formats exist, Linux prefers `.tar.gz`, while macOS and
 Windows prefer `.zip`. The other archive format remains a fallback.
@@ -89,14 +100,16 @@ aborts installation without downgrading to checksums.
 
 By default, provenance is also pinned to
 `OWNER/REPO/.github/workflows/release-build.yaml`, matching gitrail. Use
-`--workflow PATH` for a differently named release workflow. `--workflow=`
-omits only the workflow constraint; repository, source commit, and signer
-commit constraints remain enabled.
+`--workflow PATH` for a differently named release workflow. If the default
+workflow does not exist, workflow pinning is omitted. An explicitly specified
+workflow must exist or generation fails. `--workflow=` omits only the workflow
+constraint; repository, source commit, and signer commit constraints remain
+enabled.
 
 ## Synopsis
 
 ```console
-insmith [flags] OWNER/REPO
+insmith [flags] [OWNER/REPO]
 ```
 
 ## Installation
