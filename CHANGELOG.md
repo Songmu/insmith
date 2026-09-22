@@ -1,5 +1,9 @@
 # Changelog
 
+## [v0.0.3](https://github.com/Songmu/insmith/compare/v0.0.2...v0.0.3) - 2026-09-22
+
+- docs: improve public repository guidance by @Songmu with @Copilot in https://github.com/Songmu/insmith/pull/17
+
 ## [v0.0.2](https://github.com/Songmu/insmith/compare/v0.0.1...v0.0.2) - 2026-09-22
 
 - Fix release workflow dispatch without checkout by @Songmu with @Copilot in https://github.com/Songmu/insmith/pull/15
