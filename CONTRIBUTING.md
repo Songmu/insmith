@@ -58,8 +58,8 @@ behavioral divergence from upstream is in `http_download_curl`, where insmith
 adds `--proto '=https'` and `--tlsv1.2` to reject plaintext or downgraded
 transports.
 
-The generated script also retains attribution to the installer lineage from
-`goreleaser/godownloader` through `Songmu/godzil` and `Songmu/gitrail`.
+The generated script also retains attribution to `goreleaser/godownloader`,
+which the installer's base and ideas come from.
 
 ### Shell portability
 
