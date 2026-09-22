@@ -79,6 +79,59 @@ func TestGenerateGolden(t *testing.T) {
 	}
 }
 
+func TestGenerateVerificationSpecialization(t *testing.T) {
+	tests := []struct {
+		verification string
+		present      []string
+		absent       []string
+	}{
+		{
+			verification: "none",
+			absent: []string{
+				"VERIFICATION=", "CHECKSUM_PATTERN=", "WORKFLOW=", "verify_artifact",
+				"verify_checksum", "verify_attestation", "hash_sha256",
+			},
+		},
+		{
+			verification: "checksum",
+			present:      []string{"CHECKSUM_PATTERN=", "verify_checksum", "hash_sha256"},
+			absent:       []string{"VERIFICATION=", "WORKFLOW=", "verify_attestation", "attestation_capability"},
+		},
+		{
+			verification: "attestation",
+			present:      []string{"WORKFLOW=", "verify_attestation", "attestation_capability"},
+			absent:       []string{"VERIFICATION=", "CHECKSUM_PATTERN=", "verify_checksum", "hash_sha256"},
+		},
+		{
+			verification: "attestation-or-checksum",
+			present:      []string{"WORKFLOW=", "CHECKSUM_PATTERN=", "verify_checksum", "verify_attestation", "hash_sha256"},
+			absent:       []string{"VERIFICATION="},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.verification, func(t *testing.T) {
+			script, err := generate(config{
+				repository:      "owner/repo",
+				checksumPattern: "SHA256SUMS",
+				verification:    tt.verification,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, text := range tt.present {
+				if !strings.Contains(script, text) {
+					t.Errorf("generated script does not contain %q", text)
+				}
+			}
+			for _, text := range tt.absent {
+				if strings.Contains(script, text) {
+					t.Errorf("generated script unexpectedly contains %q", text)
+				}
+			}
+		})
+	}
+}
+
 func TestGenerateValidation(t *testing.T) {
 	type testCase struct {
 		name string
@@ -155,7 +208,6 @@ func TestRunVerificationDefaults(t *testing.T) {
 	for _, want := range []string{
 		"WORKFLOW='owner/repo/.github/workflows/release-build.yaml'",
 		"CHECKSUM_PATTERN='SHA256SUMS'",
-		"VERIFICATION='attestation-or-checksum'",
 	} {
 		if !strings.Contains(stdout.String(), want) {
 			t.Errorf("default output does not contain %q", want)
@@ -196,7 +248,7 @@ func TestWorkflowPath(t *testing.T) {
 		script, err := generate(config{
 			repository:   "owner/repo",
 			workflow:     workflow,
-			verification: "none",
+			verification: "attestation",
 		})
 		if err != nil {
 			t.Fatal(err)

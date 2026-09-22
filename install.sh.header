@@ -2,7 +2,7 @@ cat /dev/null <<EOF
 ------------------------------------------------------------------------
 Selected functions based on client9/shlib v2026.08.30 (commit 3593994).
 This excerpt includes the command, logging, platform, archive, download,
-GitHub Release, and SHA-256 helpers used by generated installers.
+GitHub Release helpers used by generated installers.
 Unselected functions and upstream explanatory comments are omitted.
 
 https://github.com/client9/shlib
@@ -377,6 +377,7 @@ github_release() {
 
   echo "$_shlib_version"
 }
+{{if .ChecksumVerification}}
 hash_sha256() {
   if [ -z "${1-}" ]; then
     set --
@@ -437,6 +438,7 @@ hash_sha256_verify() {
     return 1
   fi
 }
+{{end}}
 cat /dev/null <<EOF
 ------------------------------------------------------------------------
 End of selected shlib functions based on client9/shlib v2026.08.30

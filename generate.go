@@ -130,13 +130,14 @@ func generate(c config) (string, error) {
 
 	var output bytes.Buffer
 	if err := scriptTemplate.Execute(&output, struct {
-		Repository      string
-		Name            string
-		Binaries        string
-		Workflow        string
-		AssetPattern    string
-		ChecksumPattern string
-		Verification    string
+		Repository              string
+		Name                    string
+		Binaries                string
+		Workflow                string
+		AssetPattern            string
+		ChecksumPattern         string
+		ChecksumVerification    bool
+		AttestationVerification bool
 	}{
 		shellQuote(c.repository),
 		shellQuote(c.name),
@@ -144,7 +145,8 @@ func generate(c config) (string, error) {
 		shellQuote(c.workflow),
 		shellQuote(c.assetPattern),
 		shellQuote(c.checksumPattern),
-		shellQuote(c.verification),
+		c.verification == "checksum" || c.verification == "attestation-or-checksum",
+		c.verification == "attestation" || c.verification == "attestation-or-checksum",
 	}); err != nil {
 		return "", err
 	}

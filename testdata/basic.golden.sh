@@ -9,7 +9,7 @@ cat /dev/null <<EOF
 ------------------------------------------------------------------------
 Selected functions based on client9/shlib v2026.08.30 (commit 3593994).
 This excerpt includes the command, logging, platform, archive, download,
-GitHub Release, and SHA-256 helpers used by generated installers.
+GitHub Release helpers used by generated installers.
 Unselected functions and upstream explanatory comments are omitted.
 
 https://github.com/client9/shlib
@@ -384,6 +384,7 @@ github_release() {
 
   echo "$_shlib_version"
 }
+
 hash_sha256() {
   if [ -z "${1-}" ]; then
     set --
@@ -444,6 +445,7 @@ hash_sha256_verify() {
     return 1
   fi
 }
+
 cat /dev/null <<EOF
 ------------------------------------------------------------------------
 End of selected shlib functions based on client9/shlib v2026.08.30
@@ -456,7 +458,7 @@ BINARIES='gitrail'
 WORKFLOW='Songmu/gitrail/.github/workflows/release-build.yaml'
 ASSET_PATTERN='{name}_{version}_{os}_{arch}'
 CHECKSUM_PATTERN='SHA256SUMS'
-VERIFICATION='attestation-or-checksum'
+
 
 log_prefix() {
 	printf '%s\n' "$REPOSITORY"
@@ -529,6 +531,8 @@ verify_checksum() {
 	log_info "verified SHA-256 checksum for $asset_name"
 }
 
+
+
 attestation_capability() {
 	is_command gh || return 2
 	is_command git || return 2
@@ -578,39 +582,24 @@ verify_attestation() {
 	fi
 }
 
+
+
 verify_artifact() {
-	case "$VERIFICATION" in
-		none) ;;
-		checksum) verify_checksum ;;
-		attestation)
-			if verify_attestation; then
-				:
-			else
-				status=$?
-				case "$status" in
-					2) fail "GitHub attestation verification is unavailable" ;;
-					3) fail "could not resolve release tag $TAG to a commit" ;;
-					*) fail "attestation verification failed" ;;
-				esac
-			fi
-			;;
-		attestation-or-checksum)
-			if verify_attestation; then
-				:
-			else
-				status=$?
-				case "$status" in
-					2)
-						log_info "build provenance verification unavailable; falling back to SHA-256"
-						verify_checksum
-						;;
-					3) fail "could not resolve release tag $TAG to a commit" ;;
-					*) fail "attestation verification failed" ;;
-				esac
-			fi
-			;;
-	esac
+	if verify_attestation; then
+		:
+	else
+		status=$?
+		case "$status" in
+			2)
+				log_info "build provenance verification unavailable; falling back to SHA-256"
+				verify_checksum
+				;;
+			3) fail "could not resolve release tag $TAG to a commit" ;;
+			*) fail "attestation verification failed" ;;
+		esac
+	fi
 }
+
 
 check_archive_member() {
 	member=$1
@@ -810,7 +799,9 @@ main() {
 
 	log_info "found version: $TAG for $OS/$ARCH"
 	download_artifact
+
 	verify_artifact
+
 	extract_artifact
 	prepare_binaries
 	commit_installs

@@ -1,10 +1,10 @@
 REPOSITORY={{.Repository}}
 NAME={{.Name}}
 BINARIES={{.Binaries}}
-WORKFLOW={{.Workflow}}
-ASSET_PATTERN={{.AssetPattern}}
-CHECKSUM_PATTERN={{.ChecksumPattern}}
-VERIFICATION={{.Verification}}
+{{if .AttestationVerification}}WORKFLOW={{.Workflow}}
+{{end}}ASSET_PATTERN={{.AssetPattern}}
+{{if .ChecksumVerification}}CHECKSUM_PATTERN={{.ChecksumPattern}}
+{{end}}
 
 log_prefix() {
 	printf '%s\n' "$REPOSITORY"
@@ -66,7 +66,7 @@ line_count() {
 	sed '/^$/d' | wc -l | tr -d ' '
 }
 
-verify_checksum() {
+{{if .ChecksumVerification}}verify_checksum() {
 	checksum_name=$(printf '%s' "$CHECKSUM_PATTERN" |
 		sed -e "s/{version}/$TAG/g" -e "s/{name}/$NAME/g" -e "s/{os}/$OS/g" -e "s/{arch}/$ARCH/g")
 	checksum_url="$GITHUB_DOWNLOAD/$TAG/$checksum_name"
@@ -76,7 +76,9 @@ verify_checksum() {
 		fail "checksum verification failed for $asset_name"
 	log_info "verified SHA-256 checksum for $asset_name"
 }
+{{end}}
 
+{{if .AttestationVerification}}
 attestation_capability() {
 	is_command gh || return 2
 	is_command git || return 2
@@ -125,40 +127,34 @@ verify_attestation() {
 			--signer-digest "$commit" || return 1
 	fi
 }
+{{end}}
 
+{{if or .ChecksumVerification .AttestationVerification}}
 verify_artifact() {
-	case "$VERIFICATION" in
-		none) ;;
-		checksum) verify_checksum ;;
-		attestation)
-			if verify_attestation; then
-				:
-			else
-				status=$?
-				case "$status" in
-					2) fail "GitHub attestation verification is unavailable" ;;
-					3) fail "could not resolve release tag $TAG to a commit" ;;
-					*) fail "attestation verification failed" ;;
-				esac
-			fi
-			;;
-		attestation-or-checksum)
-			if verify_attestation; then
-				:
-			else
-				status=$?
-				case "$status" in
-					2)
-						log_info "build provenance verification unavailable; falling back to SHA-256"
-						verify_checksum
-						;;
-					3) fail "could not resolve release tag $TAG to a commit" ;;
-					*) fail "attestation verification failed" ;;
-				esac
-			fi
-			;;
-	esac
+	{{if .ChecksumVerification}}{{if .AttestationVerification}}if verify_attestation; then
+		:
+	else
+		status=$?
+		case "$status" in
+			2)
+				log_info "build provenance verification unavailable; falling back to SHA-256"
+				verify_checksum
+				;;
+			3) fail "could not resolve release tag $TAG to a commit" ;;
+			*) fail "attestation verification failed" ;;
+		esac
+	fi{{else}}verify_checksum{{end}}{{else}}{{if .AttestationVerification}}if verify_attestation; then
+		:
+	else
+		status=$?
+		case "$status" in
+			2) fail "GitHub attestation verification is unavailable" ;;
+			3) fail "could not resolve release tag $TAG to a commit" ;;
+			*) fail "attestation verification failed" ;;
+		esac
+	fi{{end}}{{end}}
 }
+{{end}}
 
 check_archive_member() {
 	member=$1
@@ -358,7 +354,9 @@ main() {
 
 	log_info "found version: $TAG for $OS/$ARCH"
 	download_artifact
+{{if or .ChecksumVerification .AttestationVerification}}
 	verify_artifact
+{{end}}
 	extract_artifact
 	prepare_binaries
 	commit_installs
