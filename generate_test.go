@@ -233,6 +233,13 @@ func TestRunWrite(t *testing.T) {
 	if !strings.Contains(string(got), "REPOSITORY='owner/repo'") {
 		t.Errorf("install.sh does not contain repository: %q", got)
 	}
+	info, err := os.Stat("install.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := info.Mode().Perm(), os.FileMode(0o755); got != want {
+		t.Errorf("install.sh mode = %o, want %o", got, want)
+	}
 }
 
 func TestRunWriteOverwritesInstallScript(t *testing.T) {
@@ -252,6 +259,13 @@ func TestRunWriteOverwritesInstallScript(t *testing.T) {
 	}
 	if strings.Contains(string(got), "old contents") {
 		t.Errorf("install.sh was not overwritten: %q", got)
+	}
+	info, err := os.Stat("install.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := info.Mode().Perm(), os.FileMode(0o755); got != want {
+		t.Errorf("install.sh mode = %o, want %o", got, want)
 	}
 }
 

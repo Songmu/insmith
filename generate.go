@@ -116,7 +116,10 @@ func runGenerator(ctx context.Context, args []string, stdout, stderr io.Writer) 
 		return err
 	}
 	if *write {
-		return os.WriteFile("install.sh", []byte(script), 0o666)
+		if err := os.WriteFile("install.sh", []byte(script), 0o755); err != nil {
+			return err
+		}
+		return os.Chmod("install.sh", 0o755)
 	}
 	_, err = io.WriteString(stdout, script)
 	return err
