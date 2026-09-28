@@ -35,7 +35,7 @@ jobs:
         name: release-${{ github.ref_name }}
         path: release
     - name: publish GitHub release
-      uses: tcnksm/ghr@8959765d1b19fad95e3aff8f9ff88a6550dafa7d # v0.18.4
+      uses: tcnksm/ghr@43083d3bbef04a78a967370c11cc760fe19badb6 # v0.18.5
       with:
         owner: ${{ github.repository_owner }}
         repository: ${{ github.event.repository.name }}
