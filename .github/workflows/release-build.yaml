@@ -29,7 +29,7 @@ jobs:
         echo "revision=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
     - name: build release archives
       id: goxz
-      uses: Songmu/goxz@ca593d878bfc0fe683ab80243fad53aeef4bcbfd # v0.11.1
+      uses: Songmu/goxz@b7b74d681760746882693f3db7c94a0888a4b714 # v0.13.0
       with:
         package-version: ${{ github.ref_name }}
         os: linux,darwin,windows
