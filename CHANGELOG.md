@@ -1,5 +1,14 @@
 # Changelog
 
+## [v0.0.5](https://github.com/Songmu/insmith/compare/v0.0.4...v0.0.5) - 2026-10-07
+
+- fix: verify release attestations on github.com by @Songmu in https://github.com/Songmu/insmith/pull/30
+- Bump reviewdog/action-actionlint from 1.76.0 to 1.78.1 by @dependabot[bot] in https://github.com/Songmu/insmith/pull/29
+- Bump tcnksm/ghr from 0.18.4 to 0.18.5 by @dependabot[bot] in https://github.com/Songmu/insmith/pull/26
+- Bump Songmu/goxz from 0.11.1 to 0.13.0 by @dependabot[bot] in https://github.com/Songmu/insmith/pull/24
+- Bump Songmu/tagpr from 1.20.3 to 1.21.1 by @dependabot[bot] in https://github.com/Songmu/insmith/pull/28
+- Delegate release checksum generation to goxz by @Songmu in https://github.com/Songmu/insmith/pull/32
+
 ## [v0.0.4](https://github.com/Songmu/insmith/compare/v0.0.3...v0.0.4) - 2026-09-22
 
 - Handle missing default workflow by @Songmu in https://github.com/Songmu/insmith/pull/19
