@@ -34,6 +34,7 @@ func TestGenerateDefaults(t *testing.T) {
 		`x) set -x`,
 		`git ls-remote "https://github.com/$REPOSITORY.git"`,
 		"gh attestation verify",
+		"--hostname github.com",
 		`--source-digest "$commit"`,
 		`--signer-digest "$commit"`,
 		"--proto '=https' --tlsv1.2",

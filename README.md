@@ -101,6 +101,9 @@ or missing digest flags) falls back to SHA-256 verification. Once attestation
 verification is attempted, a failed attestation or unresolved release tag
 aborts installation without downgrading to checksums.
 
+Attestation verification explicitly targets `github.com`, regardless of
+`GH_HOST`, without changing the environment variable.
+
 By default, provenance is also pinned to
 `OWNER/REPO/.github/workflows/release-build.yaml`. Use `--workflow PATH` for a
 differently named release workflow. If the default workflow does not exist,
