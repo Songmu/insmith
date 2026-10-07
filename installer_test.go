@@ -192,7 +192,7 @@ func TestGeneratedInstallerAttestationSuccess(t *testing.T) {
 	env, curlLog := setupArtifact(t, version, assetName, "binary", 0o755)
 	fakeBin := envValue(env, "FAKE_BIN")
 	ghLog := filepath.Join(t.TempDir(), "gh.log")
-	env = append(env, "GH_LOG="+ghLog)
+	env = append(env, "GH_LOG="+ghLog, "GH_HOST=github.example.com")
 	writeCommand(t, fakeBin, "git", `
 printf '%s\t%s\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "refs/tags/$FAKE_TAG"
 printf '%s\t%s\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb "refs/tags/$FAKE_TAG^{}"
@@ -216,6 +216,9 @@ printf '%s\t%s\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb "refs/tags/$FAKE_TAG^
 	verified, err := os.ReadFile(ghLog)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !strings.Contains(string(verified), "--hostname github.com") {
+		t.Fatalf("attestation did not explicitly use github.com: %s", verified)
 	}
 	if !strings.Contains(string(verified), "--source-digest bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb") ||
 		!strings.Contains(string(verified), "--signer-digest bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb") {
